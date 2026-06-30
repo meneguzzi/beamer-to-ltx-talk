@@ -1,16 +1,16 @@
-%% Shared preamble for the ltx-talk port of the Symbolic AI lectures.
-%% This is the ltx-talk counterpart of common-packages.tex (which targets
-%% beamer). Load it AFTER \documentclass{ltx-talk}. \DocumentMetadata must
-%% already have been set (see tag-commands.tex) so that tagging is active.
+%% TEMPLATE — ltx-talk shared preamble (adapt the PLACEHOLDERS marked <<...>>).
+%% Copy this next to your decks (e.g. as ltx-common.tex) and fill in the
+%% Identity and ThemeAccent blocks below; everything else adapts automatically.
+%% Load it AFTER \documentclass{ltx-talk}. \DocumentMetadata must already be set
+%% (it must be the very first thing in the file, before \documentclass) so
+%% tagging is active.
 %%
 %% Design notes:
 %%  - ltx-talk has no \usetheme / \setbeamercolor / \setbeamertemplate. The
 %%    visual style is driven by the kernel template system via \EditInstance.
-%%  - The look here is a first cut: a Boston-University-red header/footer to
-%%    echo the old CambridgeUS theme, to be tuned after review.
 
 %% ---------------------------------------------------------------------------
-%% Colours (ported verbatim from common-packages.tex)
+%% Colours
 %% ---------------------------------------------------------------------------
 \usepackage{xcolor}
 \definecolor{cream}{rgb}{1,0.99,0.89}
@@ -28,9 +28,42 @@
 \definecolor{darkorange}{rgb}{0.91, 0.41, 0.17}
 \definecolor{violet}{rgb}{0.56, 0.0, 1.0}
 
-%% Coloured, bold \emph (matches common-packages.tex). Individual decks may
-%% still override this with \let\emph\textbf after \begin{document}.
-\renewcommand{\emph}[1]{{\color{bostonuniversityred}\textbf{#1}}}
+%% ---------------------------------------------------------------------------
+%% Theme accent colours — EDIT THESE TWO LINES to match your beamer theme.
+%%
+%% Common beamer theme → ltx-talk colour mapping:
+%%   CambridgeUS / Madrid  →  \ThemeAccent = bostonuniversityred   \ThemeAccentText = white
+%%   Warsaw / Frankfurt    →  \ThemeAccent = {rgb}{0.2,0.2,0.6}    \ThemeAccentText = white
+%%   Metropolis            →  \ThemeAccent = {rgb}{0.35,0.35,0.35}  \ThemeAccentText = white
+%%   AnnArbor              →  \ThemeAccent = {rgb}{0.0,0.32,0.59}   \ThemeAccentText = {rgb}{0.96,0.76,0.0}
+%%   Boadilla / Rochester  →  \ThemeAccent = {rgb}{0.2,0.4,0.65}    \ThemeAccentText = white
+%%   Luebeck / Copenhagen  →  \ThemeAccent = {rgb}{0.1,0.1,0.5}     \ThemeAccentText = white
+%%   Singapore             →  \ThemeAccent = {rgb}{0.0,0.5,0.5}     \ThemeAccentText = white
+%%
+%% You can also use any named colour defined above (e.g. brightmaroon,
+%% cadmiumgreen) or add a new \definecolor before these lines.
+%% ---------------------------------------------------------------------------
+\newcommand{\ThemeAccent}{bostonuniversityred}   %% <<ADAPT>> header/footer bg
+\newcommand{\ThemeAccentText}{white}             %% <<ADAPT>> header/footer fg
+
+%% ---------------------------------------------------------------------------
+%% Identity — EDIT THESE FIVE LINES, everything else auto-adapts.
+%% ---------------------------------------------------------------------------
+\newcommand{\AuthorShort}{<<SHORT AUTHOR(S)>>}        %% e.g. Smith and Jones
+\newcommand{\AuthorLong} {<<FULL AUTHOR NAME(S)>>}    %% e.g. Alice Smith \and Bob Jones
+\newcommand{\AuthorEmails}{<<EMAIL(S)>>}              %% e.g. a.smith@uni.ac.uk \quad b.jones@uni.ac.uk
+\newcommand{\InstShort}  {<<SHORT INSTITUTION>>}      %% e.g. Aberdeen
+\newcommand{\InstLong}   {<<FULL INSTITUTION NAME>>}  %% e.g. University of Aberdeen
+
+\author[\AuthorShort]{\AuthorLong}
+\institute[\InstShort]{\InstLong}
+
+%% ---------------------------------------------------------------------------
+%% Content styling (uses \ThemeAccent — change the macro above, not here)
+%% ---------------------------------------------------------------------------
+
+%% Coloured, bold \emph. Individual decks may override with \let\emph\textbf.
+\renewcommand{\emph}[1]{{\color{\ThemeAccent}\textbf{#1}}}
 
 \newcommand{\obl}[0]{\mbox{\color{violet}{$\mathbf{O}$}}}
 \newcommand{\prh}[0]{\mbox{\color{red}{$\mathbf{F}$}}}
@@ -38,7 +71,7 @@
 \newcommand{\viz}[0]{{\it viz.},\ }
 
 %% ---------------------------------------------------------------------------
-%% Maths and content packages (ported from common-packages.tex)
+%% Maths and content packages
 %% ---------------------------------------------------------------------------
 \usepackage{bm}
 \renewcommand{\mathbf}[1]{\ensuremath{\bm{#1}}}
@@ -68,20 +101,63 @@
 \usepackage{pgfplots}
 \pgfplotsset{width=7cm,compat=1.15}
 
-%% pdfpc speaker-note stub (no-op), kept for source compatibility.
-\newcommand{\pdfpcnote}[1]{{}}
+%% Speaker-note stubs (no-op), kept for source compatibility with pdfpc/beamer.
+\newcommand{\pdfpcnote}[1]{}
+\newcommand{\note}[2][]{}    %% beamer \note[item]{text} / \note{text}
+
+%% ---------------------------------------------------------------------------
+%% Beamer-compatibility stubs — constructs beamer provided that ltx-talk does
+%% not offer natively. See also: compromises.md entries COLS-01 and BOX-01.
+%% ---------------------------------------------------------------------------
+
+%% columns / column — beamer's side-by-side layout.
+%% Replaced by minipage pairs. Accessibility note: the PDF tag tree records
+%% content in source order, so screen readers hear the ENTIRE left column
+%% before the right column. This is correct for independent side-by-side
+%% blocks (Problem | Solution, Code | Output) — the normal use of beamer
+%% columns. Do NOT use this for content where the two columns have paired rows
+%% (e.g. a concept grid); use a proper tabular/table instead, whose rows are
+%% read left-to-right as expected. The \hfill between columns is decorative
+%% and does not appear in the tag tree. The optional alignment arg on
+%% `columns' is silently accepted but ignored (minipage always uses [t]).
+\newenvironment{columns}[1][t]{\par\medskip\noindent\ignorespaces}{\par\medskip}
+\newenvironment{column}[2][t]{\begin{minipage}[#1]{#2}\ignorespaces}%
+                              {\end{minipage}\hfill\ignorespaces}
+
+%% Coloured highlight boxes — beamer's block / alertblock / exampleblock.
+%%
+%% Accessibility note: the box title (first argument) is tagged as plain text,
+%% not as a heading; screen readers see it as body text. If semantic structure
+%% matters, use a \subsubsection* inside the box body instead. The coloured
+%% border is drawn by tcolorbox's standard (non-TikZ) skin and is automatically
+%% marked as an Artifact by the LaTeX tagging kernel — it does not pollute the
+%% reading order.
+%%
+%% We load tcolorbox WITHOUT [most]: the skins/TikZ libraries in [most] produce
+%% untagged graphics that can break the PDF tag tree under \DocumentMetadata.
+\usepackage{tcolorbox}
+
+\newtcolorbox{block}[1]{
+  title={#1}, fonttitle=\bfseries,
+  colback=aliceblue, colframe=\ThemeAccent,
+  left=4pt, right=4pt, top=2pt, bottom=2pt,
+}
+\newtcolorbox{alertblock}[1]{
+  title={#1}, fonttitle=\bfseries,
+  colback=red!8!white, colframe=red!70!black,
+  left=4pt, right=4pt, top=2pt, bottom=2pt,
+}
+\newtcolorbox{exampleblock}[1]{
+  title={#1}, fonttitle=\bfseries,
+  colback=cadmiumgreen!8!white, colframe=cadmiumgreen,
+  left=4pt, right=4pt, top=2pt, bottom=2pt,
+}
 
 %% hyperref metadata. With \DocumentMetadata active hyperref is already loaded;
 %% we only adjust its settings here.
 \hypersetup{
     bookmarks=true,colorlinks=true,linkcolor=blue,linktocpage,bookmarksopen=true,
 }
-
-%% ---------------------------------------------------------------------------
-%% Authorship (title is set per-deck)
-%% ---------------------------------------------------------------------------
-\author[Meneguzzi and Sripada]{Felipe Meneguzzi \and Yaji Sripada}
-\institute[Aberdeen]{University of Aberdeen}
 
 %% ---------------------------------------------------------------------------
 %% Custom title page.
@@ -97,26 +173,26 @@
   \begin{frame}
     \centering
     \vfill
-    {\color{bostonuniversityred}\Huge\bfseries #1}\\[0.5em]
+    {\color{\ThemeAccent}\Huge\bfseries #1}\\[0.5em]
     {\Large #2}\\[2.5em]
-    {\large Felipe Meneguzzi \qquad Yaji Sripada}\\[0.4em]
-    {\small\ttfamily felipe.meneguzzi@abdn.ac.uk \quad yaji.sripada@abdn.ac.uk}\\[0.4em]
-    University of Aberdeen\\[2.5em]
+    {\large \AuthorLong}\\[0.4em]
+    {\small\ttfamily \AuthorEmails}\\[0.4em]
+    \InstLong\\[2.5em]
     {\small #3}%
     \vfill
   \end{frame}%
 }
 
 %% ---------------------------------------------------------------------------
-%% Visual style via ltx-talk templates (first cut; tune after review)
+%% Visual style via ltx-talk templates
 %% ---------------------------------------------------------------------------
 \EditInstance{header}{std}{
-  background-color = bostonuniversityred,
-  color            = white,
+  background-color = \ThemeAccent,
+  color            = \ThemeAccentText,
 }
 \EditInstance{footer}{std}{
-  background-color = bostonuniversityred,
-  color            = white,
+  background-color = \ThemeAccent,
+  color            = \ThemeAccentText,
   element-order    = {author, title, framenumber},
   separator        = \hfill,
   left-hspace      = 3mm,
@@ -139,7 +215,7 @@
   \begin{frame}%
     \vfill
     \begin{center}
-      {\color{bostonuniversityred}\Huge\bfseries #1}
+      {\color{\ThemeAccent}\Huge\bfseries #1}
     \end{center}
     \vfill
   \end{frame}%

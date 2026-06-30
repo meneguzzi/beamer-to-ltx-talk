@@ -27,7 +27,7 @@ the upstream docs because they only surface under *tagging* (`\DocumentMetadata`
 > **Companion references (read before doing anything):**
 > - `references/compromises.md` — the catalogue of incompatibilities, with symptom, cause,
 >   workaround, and "revisit when". **This is the heart of the skill.**
-> - `references/preamble-template.tex` — a ready-made ltx-talk shared preamble.
+> - `assets/preamble-template.tex` — the deployable ltx-talk shared preamble (copy to the project and fill in the Identity and ThemeAccent blocks at the top).
 > - `scripts/convert_deck.py` — the pattern-based source transformer (frametitles,
 >   sections, title page, verbatim frames, empty titles).
 > - The sibling `latex-beamer` skill's `references/ltx-talk.md` has general ltx-talk syntax
@@ -83,7 +83,7 @@ If the deck `\input`s a shared preamble (common in courses), create a **parallel
 preamble (e.g. `ltx-common.tex`) rather than editing the Beamer one in place — the other
 unconverted decks still need the Beamer version. For a standalone deck, inline the preamble.
 
-Start from `references/preamble-template.tex`. It already:
+Start from `assets/preamble-template.tex`. It already:
 - loads no Beamer commands (there is **no** `\usetheme`/`\setbeamercolor`/`\setbeamertemplate`/
   `\usebeamerfont` in ltx-talk — they do not exist);
 - rebuilds the visual style via the kernel template system (`\EditInstance{header}{std}{…}`,
