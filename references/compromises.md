@@ -16,10 +16,16 @@ why they are absent from the upstream quick-start docs.
 - **Symptom:** `! Improper \halign inside $$'s.` (and, with multi-line `\State{…\\…}`,
   `! You can't use \halign in math mode`) — emitted at `\end{frame}`. The frame cannot be
   produced at all. Triggered by `\Comment` and/or `\Function` inside `\begin{algorithmic}`.
-- **Cause:** the `algpseudocodex` package's algorithmic body uses an alignment that the
-  tagging/output path turns into an improper display `\halign`. Independent of columns,
-  `[c]`, tagging *phase*, and box-wrapping (minipage/parbox/varwidth do **not** help, nor
-  does `\SuspendTagging` for function blocks).
+- **Cause (verified 2026-06-27, ltx-talk 0.5.0):** `algpseudocodex` typesets every code
+  line inside a **`varwidth`** box (it `\RequirePackage{varwidth}`; see algpseudocodex.sty
+  lines 28, 185, 470, 854 — varwidth is what powers its `indLines` guide rules and aligned
+  comments). `varwidth` is two-pass: it sets the body to measure it, then *reprocesses* it
+  via an internal `\halign`. Under tagging that reprocessing runs in a display-math (`$$`)
+  context, where `\halign` is illegal → "Improper `\halign` inside `$$`'s" plus
+  `varwidth: Failed to reprocess entire contents`. **Independent of the `math` tagging
+  phase** — reproduces under `testphase={phase-I,…}` with no math phase at all. Box-wrapping
+  (minipage/parbox/varwidth) does **not** help. `\SuspendTagging`/`\ResumeTagging` around
+  the env makes pdflatex **hang** (and would un-tag the algorithm anyway) — do not use it.
 - **Workaround:** switch the engine to the **classic `algorithmicx`/`algpseudocode`**:
   ```latex
   \usepackage{algorithmicx}
@@ -29,9 +35,12 @@ why they are absent from the upstream quick-start docs.
   `\Statex`). The exact same algorithm source then compiles tagged and clean. Drop the
   `algpseudocodex` options `noEnd,indLines=false` (not valid here). Cosmetic differences:
   classic prints "end function" unless `[noend]`; no indent guide lines.
-- **Revisit when:** either package addresses tagging. No upstream issue is filed (this looks
-  like an `algpseudocodex` × tagpdf interaction, not strictly an ltx-talk bug) — consider
-  filing one. **This blocks most algorithm-bearing decks, so check it first.**
+- **Revisit when:** **ltx-talk may fix this later** — the real fix is for the tagged output
+  path to tolerate a `\halign` produced by boxed two-pass reprocessing (varwidth), so re-test
+  `algpseudocodex` against each new ltx-talk release and drop the engine swap once it works.
+  It could equally be fixed from the `algpseudocodex` side (a varwidth-free mode). No upstream
+  issue is filed against either yet — consider filing one citing the varwidth reprocessing
+  mechanism above. **This blocks most algorithm-bearing decks, so check it first.**
 
 ## C-TOC — `\tableofcontents` corrupts the tag tree
 
@@ -115,10 +124,86 @@ why they are absent from the upstream quick-start docs.
 
 - **Blocks:** `\begin{block}{}…\end{block}` *works* but is undocumented/under development
   (issue #205). Usable for simple callouts; don't build elaborate styling on it.
-- **Theorems:** `\newtheorem*` is incomplete (issue #219). Avoid for now.
+  **CRITICAL:** also see C-BLOCK-ALGO below — `block` conflicts with `algorithmic`.
+- **Theorems:** `\newtheorem*` is incomplete (issue #219). Use tcolorbox instead — see C-BLOCK-ALGO.
 - **Media:** `media9 \includemedia`, `\movie`, `\animategraphics` are untested under tagging —
   verify case-by-case or fall back to a static image + hyperlink.
 - **Revisit when:** the cited issues close.
+
+## C-BLOCK-ALGO — `\begin{block}` conflicts with algorithmicx  ⚠️ non-obvious
+
+- **Symptom:** `! Missing \endcsname inserted` / `! Extra \endcsname` at `\end{frame}` in any
+  frame that uses `\begin{algorithmic}`, even if no theorem environment appears in that frame.
+  Occurs as soon as a `\newenvironment{definition}{\begin{block}{…}}{…}` (or similar) is
+  **defined anywhere in the preamble** — using it is not required.
+- **Cause:** ltx-talk's `\begin{block}` resets or reuses an internal name that collides with
+  algorithmicx's `\csname`-based block-depth stack
+  (`\ALG@b@N@EndFor`, `\ALG@currentblock`, `\ALG@makebeginrepeat`). The `\csname` push/pop
+  tracking gets mismatched, and `\end{frame}` sees unbalanced `\endcsname` pairs.
+- **Workaround:** define all theorem-like environments (`definition`, `theorem`, `corollary`,
+  `example`) using **tcolorbox** instead of `\begin{block}`:
+  ```latex
+  \usepackage[most]{tcolorbox}
+  \tcbset{theoremstyle/.style={
+    colback=aliceblue, colframe=bostonuniversityred,
+    fonttitle=\bfseries, sharp corners, boxrule=0.4pt,
+    left=4pt, right=4pt, top=2pt, bottom=2pt,
+  }}
+  \newenvironment{definition}{\begin{tcolorbox}[theoremstyle, title=Definition]}{\end{tcolorbox}}
+  ```
+  tcolorbox does not touch algorithmicx's internal counters — tagging-safe and conflict-free.
+- **Revisit when:** ltx-talk issue #205 / #219 land a stable `\newtheorem` / block environment
+  that does not interfere with `algorithmicx`.
+
+## C-OVERLAY-ALIGN — overlay tokens inside `tabular`/`align*` break alignment
+
+- **Symptom:** `! Misplaced alignment tab character &` or `! Improper \halign inside $'s` when
+  an overlay command (`\onslide`, `\visible`, `\only`) wraps an entire row including `&` or
+  `\\`: e.g. `\onslide<2>{& = formula \\}` or `\onslide<+->{cell1 & cell2 \\}`.
+- **Cause:** `&` and `\\` must be at the **top level** of a `tabular`/`align*` environment
+  (they are active inside the `\halign`). Wrapping them in a group (even a non-expanded one)
+  removes them from that top level and TeX errors out.
+- **Workaround:** keep `&` and `\\` at the top level; wrap only the **content**:
+  ```latex
+  % tabular — use <.-> on cols 2+ to share the same overlay step
+  \onslide<+->{cell1} & \onslide<.->{cell2} & \onslide<.->{cell3} \\
+  % align* — wrap the formula, not the alignment token
+  & \onslide<4->{= \frac{1}{n}(R_n + (n-1)Q_n)} \\
+  ```
+  `<.->` on subsequent cells reuses the current step counter without incrementing, so all
+  cells in a row appear and disappear together. `<+->` on the first cell increments the step.
+- **Revisit when:** n/a — this is a fundamental TeX alignment mechanism constraint.
+
+## C-OVERLAY-ALGO — `\onslide{\State…}` corrupts algorithmicx block tracking
+
+- **Symptom:** `! Missing \endcsname inserted` / `! Extra \endcsname` at `\end{frame}` in
+  frames that use `\begin{algorithmic}` AND wrap `\State` (or `\Comment`) in an overlay
+  command: `\onslide<2>{\State formula}`.
+- **Cause:** algorithmicx tracks nesting depth with `\csname`-based counters
+  (`\ALG@b@N@EndFor`, `\ALG@currentblock`). Wrapping `\State` in a group (`\onslide{…}`)
+  scopes the push but not the pop of those counters, leaving them permanently mismatched.
+  `\end{frame}` then sees unbalanced `\endcsname` pairs.
+- **Workaround:** use algorithmicx's **native overlay-spec syntax** — the `<spec>` argument
+  goes directly after the command name, with no braces around the full statement:
+  ```latex
+  % Instead of: \onslide<2>{\State $x \gets y$  \Comment{note}}
+  \State<2> $x \gets y$      % shows \State on step 2+
+  \Comment<2>{note}          % shows \Comment on step 2+
+  ```
+  Wrapping a **balanced** `\If{…}\EndIf` pair (both the begin and end hidden together) in
+  `\onslide{…}` is safe because both push and pop are hidden together. Only wrapping a single
+  `\State` (or one side of a matching pair) is unsafe.
+- **Revisit when:** n/a — the native overlay-spec syntax is the intended API.
+
+## C-DISPMATH-NEWLINE — `\\` after display math is invalid
+
+- **Symptom:** `! There's no line here to end.` at a `\\` or `\\*[Ncm]` that follows a display
+  math block (`$…$`, `\[…\]`, `equation`, etc.).
+- **Cause:** display math ends in vertical mode; `\\` (a line-break command) is only valid in
+  horizontal/paragraph mode.
+- **Workaround:** replace `\\[Ncm]` with `\vspace{Ncm}` and bare `\\` with a blank line
+  (paragraph break).
+- **Revisit when:** n/a — this is a fundamental LaTeX constraint.
 
 ---
 
@@ -127,7 +212,12 @@ why they are absent from the upstream quick-start docs.
 | Error text | Cause | Entry |
 |---|---|---|
 | `Improper \halign inside $$'s` | algpseudocodex algorithm | C-ALGO |
+| `Improper \halign inside $'s` | overlay around `&`/`\\` in `tabular`/`align*` | C-OVERLAY-ALIGN |
+| `Misplaced alignment tab character &` | overlay around `&` in `tabular` | C-OVERLAY-ALIGN |
 | `You can't use \halign in math mode` | multi-line `\State{…\\…}` (algpseudocodex) | C-ALGO |
+| `Missing \endcsname` / `Extra \endcsname` at `\end{frame}` | `\begin{block}`+algorithmic | C-BLOCK-ALGO |
+| `Missing \endcsname` / `Extra \endcsname` at `\end{frame}` | `\onslide{\State…}` in algorithmic | C-OVERLAY-ALGO |
+| `There's no line here to end` | `\\` after display math | C-DISPMATH-NEWLINE |
 | `tagpdf Error: … begin/end … differ` / `Sect can not be closed` | `\tableofcontents` | C-TOC |
 | `Not allowed in LR mode` at `\maketitle` | `frame-title-arg` option set | C-MAKETITLE |
 | frame title appears as body text | braced title, no `\frametitle` | C-FRAMETITLE |
