@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 convert_deck.py — pattern-based Beamer -> ltx-talk source transformer.
 
 Faithful and minimal: rewrites only the constructs the class change forces, never
@@ -11,8 +11,16 @@ judgement (the title-page content, folding double titles, anything inside a fram
 it warns about those instead.
 
 Usage:
-    convert_deck.py DECK.tex [--in-place] [--sections {heading,keep}]
+    convert_deck.py DECK.tex [--in-place]
                     [--old-preamble common-packages.tex] [--new-preamble ltx-common.tex]
+    convert_deck.py DECK.tex --lint      # report only, rewrite nothing; exit 1 if issues
+
+\section is left alone on purpose: the shared preamble redefines \section to emit the
+section divider frame, so the decks need no edit (see C-TOC in references/compromises.md).
+
+--lint catches the failures the COMPILER never reports: a braced frame title renders as
+body text, and \center{...} corrupts the tag tree from nowhere near the offending line.
+Run it before every build.
 
 Without --in-place it prints the converted source to stdout and the report to stderr.
 See references/compromises.md for the IDs cited in warnings (C-ALGO, C-TOC, ...).
@@ -27,6 +35,65 @@ NOTE = []          # informational change counts
 
 def is_comment(line: str) -> bool:
     return line.lstrip().startswith('%')
+
+
+def match_brace(text: str, open_idx: int):
+    """Index just past the '}' matching the '{' at open_idx, or None if unbalanced."""
+    depth, j, n = 1, open_idx + 1, len(text)
+    while j < n and depth:
+        if text[j] == '\\':                 # skip an escaped char
+            j += 2
+            continue
+        if text[j] == '{':
+            depth += 1
+        elif text[j] == '}':
+            depth -= 1
+        j += 1
+    return j if depth == 0 else None
+
+
+def fix_center_arg(text: str):
+    r"""C-CENTER-ARG: \center{X} -> \begin{center}X\end{center}.
+
+    \center is a DECLARATION (the internal begin of the center env), not a command taking
+    an argument. Beamer tolerated the misuse silently; under tagging it leaks an unclosed
+    paragraph and yields "number of automatic begin/end text-unit para hooks differ",
+    reported nowhere near the offending line.
+    """
+    out, i, n, fixed = [], 0, len(text), 0
+    pat = re.compile(r'\\center\s*\{')
+    while i < n:
+        m = pat.search(text, i)
+        if not m:
+            out.append(text[i:])
+            break
+        # don't touch commented-out lines
+        bol = text.rfind('\n', 0, m.start()) + 1
+        if text[bol:m.start()].lstrip().startswith('%'):
+            out.append(text[i:m.end()])
+            i = m.end()
+            continue
+        end = match_brace(text, m.end() - 1)
+        if end is None:                      # unbalanced: leave it, but shout
+            line_no = text.count('\n', 0, m.start()) + 1
+            WARN.append(('C-CENTER-ARG',
+                         f'line {line_no}: \\center{{...}} with unbalanced braces — could not '
+                         'rewrite. Fix by hand: \\center is a declaration, not a command.'))
+            out.append(text[i:m.end()])
+            i = m.end()
+            continue
+        inner = text[m.end():end - 1]
+        out.append(text[i:m.start()])
+        out.append(f'\\begin{{center}}{inner}\\end{{center}}')
+        i = end
+        fixed += 1
+    if fixed:
+        NOTE.append(f'\\center{{...}} -> center env ({fixed})')
+        WARN.append(('C-CENTER-ARG',
+                     f'Rewrote {fixed} \\center{{...}} misuse(s). \\center is a declaration, '
+                     'not a command taking an argument; under tagging it leaks an unclosed '
+                     'paragraph ("begin/end text-unit para hooks differ") far from the line.'))
+    return ''.join(out)
 
 
 def strip_atbeginsection(text: str):
@@ -59,12 +126,12 @@ def strip_atbeginsection(text: str):
         NOTE.append(f'removed {removed} \\AtBeginSection block(s)')
         WARN.append(('C-TOC',
                      'Auto-outline frames (\\AtBeginSection + \\tableofcontents) removed: '
-                     'ltx-talk \\tableofcontents corrupts the tag tree. Section dividers '
-                     'from \\heading{} substitute for them.'))
+                     'ltx-talk \\tableofcontents corrupts the tag tree. The preamble\'s '
+                     'redefined \\section emits a divider frame instead (\\section* to opt out).'))
     return ''.join(out)
 
 
-def convert_line(line: str, sections_mode: str, old_pre: str, new_pre: str) -> str:
+def convert_line(line: str, old_pre: str, new_pre: str) -> str:
     if is_comment(line):
         return line
 
@@ -131,28 +198,103 @@ def convert_line(line: str, sections_mode: str, old_pre: str, new_pre: str) -> s
         NOTE.append('frame title (w/ comment) -> frametitle')
         return f'{m.group(1)}\\begin{{frame}}{opt} {comment}\n{m.group(1)}\\frametitle{{{m.group(3)}}}\n'
 
-    # sections -> headings (divider). Plain \section is silent under ltx-talk otherwise.
-    m = re.match(r'^(\s*)\\section\{([^{}]*)\}\s*$', body)
-    if m and sections_mode == 'heading':
-        NOTE.append('section -> heading')
-        return f'{m.group(1)}\\heading{{{m.group(2)}}}\n'
-
+    # \section is deliberately NOT rewritten: the shared preamble redefines \section
+    # itself to emit the divider frame (C-TOC), so the decks keep their original lines.
     return line
+
+
+#: (compromise-id, compiled regex, message) — pure source greps, no build needed.
+#: Each entry is a failure the LaTeX compiler will NOT report.
+LINTS = [
+    ('C-FRAMETITLE',
+     re.compile(r'^\s*\\begin\{frame\}(?:\[[^\]]*\])?\{'),
+     'braced frame title left unconverted — this renders as BODY TEXT with no error and '
+     'no title in the header. Convert to \\frametitle{...} (nested braces: run '
+     'scripts/fix_frame_titles.py).'),
+    ('C-CENTER-ARG',
+     re.compile(r'\\center\s*\{'),
+     '\\center{...} takes no argument — it is a declaration. Under tagging this leaks an '
+     'unclosed paragraph ("begin/end text-unit para hooks differ") reported far from here. '
+     'Use \\begin{center}...\\end{center}.'),
+    ('C-CENTER-ARG',
+     re.compile(r'\\(?:centering|raggedright|raggedleft)\s*\{'),
+     'declaration used as if it took an argument — same tag-tree hazard as \\center{...}. '
+     'Use the matching environment, or drop the braces so it acts as a declaration.'),
+    ('C-OVERLAY-ALGO',
+     re.compile(r'\\State\s*<'),
+     '\\State<n> is SILENTLY IGNORED by classic algpseudocode: it compiles clean and the '
+     'line then shows on every slide. Use \\State \\onslide<n>{...} instead.'),
+    ('C-TOC',
+     re.compile(r'\\tableofcontents'),
+     '\\tableofcontents corrupts the tag tree under ltx-talk. Remove it; the redefined '
+     '\\section already emits a divider frame per section.'),
+    ('C-NOBEAMER',
+     re.compile(r'\\(?:usetheme|usecolortheme|usefonttheme|setbeamer\w*|usebeamer\w*|'
+                r'beamercolorbox)\b'),
+     'Beamer-only command; undefined in ltx-talk. Restyle via \\EditInstance.'),
+    ('C-BACKGROUND',
+     re.compile(r'\\usebackgroundtemplate'),
+     'no equivalent in ltx-talk. Use an overlay tikz node — do NOT no-op stub it: these '
+     'frames usually hold white text over a dark image, which would become invisible.'),
+    ('C-ALGO',
+     re.compile(r'\\usepackage(?:\[[^\]]*\])?\{algpseudocodex\}'),
+     'algpseudocodex cannot be typeset under tagging at all. Swap to classic '
+     'algorithmicx + algpseudocode[noend].'),
+    ('C-ALGO-FLOAT',
+     re.compile(r'\\begin\{algorithm\}'),
+     'the `algorithm` FLOAT is not registered for tagging. Drop the float wrapper and keep '
+     'bare (still tagged) `algorithmic`.'),
+]
+
+
+def lint(text: str, path: str) -> int:
+    """Report source-level failures the compiler stays silent about. Returns issue count."""
+    hits = []
+    for lineno, line in enumerate(text.split('\n'), 1):
+        if is_comment(line):
+            continue
+        code = re.sub(r'(?<!\\)%.*$', '', line)     # ignore trailing comments
+        for cid, pat, msg in LINTS:
+            if pat.search(code):
+                hits.append((lineno, cid, msg, line.strip()))
+
+    print(f'\n=== convert_deck.py --lint: {path} ===', file=sys.stderr)
+    if not hits:
+        print('  clean — no silent-failure patterns found.', file=sys.stderr)
+        return 0
+
+    for lineno, cid, msg, src in hits:
+        print(f'  {path}:{lineno}: [{cid}] {msg}', file=sys.stderr)
+        print(f'      | {src}', file=sys.stderr)
+
+    by_id = {}
+    for _, cid, _, _ in hits:
+        by_id[cid] = by_id.get(cid, 0) + 1
+    summary = ', '.join(f'{c}x {i}' for i, c in sorted(by_id.items()))
+    print(f'  --- {len(hits)} issue(s): {summary}', file=sys.stderr)
+    print('  See references/compromises.md for each ID.', file=sys.stderr)
+    return len(hits)
 
 
 def main():
     ap = argparse.ArgumentParser(description='Beamer -> ltx-talk source transformer.')
     ap.add_argument('deck')
     ap.add_argument('--in-place', action='store_true')
-    ap.add_argument('--sections', choices=['heading', 'keep'], default='heading')
+    ap.add_argument('--lint', action='store_true',
+                    help='report silent-failure patterns and exit 1 if any; rewrite nothing')
     ap.add_argument('--old-preamble', default='common-packages.tex')
     ap.add_argument('--new-preamble', default='ltx-common.tex')
     args = ap.parse_args()
 
+    if args.lint:
+        text = open(args.deck, encoding='utf-8').read()
+        sys.exit(1 if lint(text, args.deck) else 0)
+
     text = open(args.deck, encoding='utf-8').read()
     text = strip_atbeginsection(text)
+    text = fix_center_arg(text)
 
-    out_lines = [convert_line(ln + '\n', args.sections, args.old_preamble, args.new_preamble)
+    out_lines = [convert_line(ln + '\n', args.old_preamble, args.new_preamble)
                  for ln in text.split('\n')]
     result = ''.join(out_lines)
     if result.endswith('\n\n'):

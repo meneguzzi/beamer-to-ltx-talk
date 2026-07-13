@@ -45,10 +45,20 @@ When you give Claude Code a Beamer `.tex` file and ask to convert it, the skill:
 3. **Runs** `scripts/convert_deck.py` to handle the mechanical rewrites:
    - Switches `\documentclass{beamer}` → `\documentclass{ltx-talk}`
    - Converts braced frame titles to `\frametitle{…}`
-   - Replaces `\section{X}` with `\heading{X}` (tagging-safe section divider)
+   - Rewrites `\center{X}` → `\begin{center}X\end{center}` (a declaration, not a command — fatal under tagging)
+   - Strips `\AtBeginSection` outline frames (the preamble's redefined `\section` emits a tagging-safe divider instead, so `\section{X}` lines stay untouched)
    - Rewrites title pages and verbatim frames
-4. **Compiles** and triages errors against the known-incompatibilities catalogue.
-5. **Delivers** a conversion report listing the ltx-talk version targeted, page-count comparison, every compromise made, and outstanding manual follow-ups (especially missing alt text on images).
+4. **Lints** with `convert_deck.py --lint` *before* compiling — see below.
+5. **Compiles** and triages errors against the known-incompatibilities catalogue.
+6. **Delivers** a conversion report listing the ltx-talk version targeted, page-count comparison, every compromise made, and outstanding manual follow-ups (especially missing alt text on images).
+
+### Lint before you build
+
+The two costliest bugs in a real 20-deck migration were **invisible to the compiler**: a braced frame title renders as body text with no error at all, and `\center{…}` corrupts the PDF tag tree with an error reported nowhere near the offending line. Both are pure source greps needing no build:
+
+```sh
+python3 scripts/convert_deck.py deck.tex --lint    # exit 1 if anything is flagged
+```
 
 ---
 
@@ -64,7 +74,10 @@ references/
                           # (symptom → cause → workaround → revisit when)
 
 scripts/
-  convert_deck.py         # Idempotent source transformer; run with --help
+  convert_deck.py         # Idempotent source transformer; also `--lint` (pre-build check)
+  fix_frame_titles.py     # Second pass: brace-matched titles convert_deck.py can't see
+  alt_text_audit.py       # Lists \includegraphics missing alt= text
+  alt_text_apply.py       # Writes alt= text back into the source
 
 SKILL.md                  # Agent instructions (step-by-step protocol)
 ```
@@ -90,7 +103,7 @@ Copy `assets/preamble-template.tex` next to your decks (e.g. as `ltx-common.tex`
 
 Common beamer theme → accent colour mapping is in the template comments.
 
-The template also includes **beamer-compatibility stubs** for constructs ltx-talk does not yet offer natively: `columns`/`column`, `block`/`alertblock`/`exampleblock`, and `\note{}`.
+⚠️ The template carries `columns`/`column`/`block` **stubs inside an `\iffalse` block — leave them disabled**. ltx-talk provides all of them *natively*; enabling the stubs clashes (`Command \columns already defined`). They exist only for a plain kernel-class setting. See **C-NATIVE-ENVS**.
 
 ---
 
@@ -98,22 +111,40 @@ The template also includes **beamer-compatibility stubs** for constructs ltx-tal
 
 Full details — including error signatures and workarounds — are in [`references/compromises.md`](references/compromises.md).
 
+**The worst failures produce no error at the offending line.** `--lint` catches all four:
+
+| ID | Silent failure | Fix |
+|---|---|---|
+| **C-FRAMETITLE-NESTED** | Nested-brace title left unconverted → frame has **no title**, text lands in the body | Run `fix_frame_titles.py` |
+| **C-CENTER-ARG** | `\center{…}` used as a command → tag tree corrupts, error lands **far away** | `\begin{center}…\end{center}` |
+| **C-OVERLAY-ALGO** | `\State<2>` → overlay **silently dropped**; line shows on every slide | `\State \onslide<2>{…}` |
+| *(alt text)* | `\includegraphics` without `alt=` → screen reader reads out **the filename** | `alt_text_audit.py` |
+
+Errors the compiler *does* report:
+
 | ID | Issue | Workaround |
 |---|---|---|
-| **C-ALGO** ⚠️ | `algpseudocodex` hangs/errors under tagging | Switch to classic `algorithmicx`/`algpseudocode` |
-| **C-TOC** | `\tableofcontents` corrupts the tag tree | Replace with `\heading{X}` section dividers |
+| **C-ALGO** ⚠️ | `algpseudocodex` cannot be typeset under tagging at all | Switch to classic `algorithmicx`/`algpseudocode[noend]` |
+| **C-FRAMESTAR-TAG** ⚠️ | `frame*` + `listings` corrupts the tag tree | `\tag_stop:`/`\tag_start:` hooks around the whole `frame*` |
 | **C-BLOCK-ALGO** ⚠️ | `\begin{block}` conflicts with `algorithmicx` | Define theorem-like envs with `tcolorbox` |
+| **C-TOC** | `\tableofcontents` corrupts the tag tree | Redefine `\section` to emit a divider frame (decks unchanged) |
+| **C-VERBATIM** | `containsverbatim`/`lstlisting` fail in `frame` | Use `frame*` — necessary but **not sufficient**, see C-FRAMESTAR-TAG |
+| **C-CALL-NEST** | Nested `\Call` breaks classic `algpseudocode` | `\algrenewcommand\Call[2]{\textproc{#1}(#2)}` |
+| **C-ALGO-FLOAT** | The `algorithm` float isn't registered for tagging | Drop the float; keep bare `algorithmic` |
+| **C-THEOREM** | No `definition`/`theorem`/… environments | Build them with `tcolorbox` |
+| **C-NATIVE-ENVS** | `columns`/`block` stubs clash with ltx-talk's native ones | Use the native envs; keep the template's stubs disabled |
 | **C-FRAMETITLE** | Braced frame titles render as body text | Use `\frametitle{…}` explicitly |
-| **C-MAKETITLE** | `frame-title-arg` breaks `\maketitle` | Don't use `frame-title-arg`; use `\frametitle` |
-| **C-TITLEPAGE** | `\maketitle` fills frame; trailing text overlaps | Use `\coursetitlepage{}{}{}`|
-| **C-VERBATIM** | `containsverbatim`/`lstlisting` fail in `frame` | Use `frame*` environment |
+| **C-MAKETITLE** | `frame-title-arg` breaks `\maketitle` | Don't use `frame-title-arg` |
+| **C-TITLEPAGE** | `\maketitle` fills frame; trailing text overlaps | Use `\coursetitlepage{}{}{}` |
 | **C-NOBEAMER** | All `\usetheme`/`\setbeamer*` are undefined | Rebuild styling with `\EditInstance` |
-| **C-OVERLAY-ALIGN** | Overlay tokens inside `tabular`/`align*` break `&` | Wrap only the cell content, not the `&`/`\\` |
-| **C-OVERLAY-ALGO** | `\onslide{\State…}` corrupts algorithmicx tracking | Use native overlay-spec: `\State<2> …` |
-| **C-DISPMATH-NEWLINE** | `\\` after display math errors | Replace with `\vspace{…}` or blank line |
-| **C-FONTS** | Maths is sans-serif by default | Load a serif maths font if needed |
+| **C-BACKGROUND** | No `\usebackgroundtemplate` | Overlay tikz node (never a no-op stub) |
+| **C-OLDFONT** | `\sc`/`\it`/`\bf` undefined, and may sit inside maths | `\ifmmode`-guarded `\providecommand` stubs |
+| **C-EDITINSTANCE-EXPAND** | Template colour keys won't expand `\ThemeAccent` | Write the colour name out literally |
+| **C-OVERLAY-ALIGN** | Overlay tokens around `&`/`\\` break alignment | Wrap only the cell content |
+| **C-DISPMATH-NEWLINE** | `\\` after display math errors | Replace with `\vspace{…}` or a blank line |
+| **C-FONTS** | Maths is sans-serif by default | Re-point the four maths symbol fonts to Latin Modern |
 
-The catalogue is version-pinned to **ltx-talk 0.5.0**. Before converting, check the [ltx-talk changelog](https://github.com/josephwright/ltx-talk/blob/main/CHANGELOG.md) and [open issues](https://github.com/josephwright/ltx-talk/issues) — some workarounds may no longer be needed.
+The catalogue is version-pinned to **ltx-talk 0.5.1**. Before converting, check the [ltx-talk changelog](https://github.com/josephwright/ltx-talk/blob/main/CHANGELOG.md) and [open issues](https://github.com/josephwright/ltx-talk/issues) — some workarounds may no longer be needed.
 
 ---
 

@@ -49,10 +49,23 @@ why they are absent from the upstream quick-start docs.
 - **Cause:** ltx-talk's `\tableofcontents` (as used in `\AtBeginSection` outline frames)
   opens/closes tagging structures unevenly. `\tagpdfsetup{activate=off}`, `\tagpdfparaOff`,
   Artifact-wrapping, and `frame*` all fail to fix it.
-- **Workaround:** drop the auto-outline. Replace `\section{X}` with a `\heading{X}` macro that
-  emits the section **and** a plain section-divider frame showing the title (tagging-clean,
-  verified). You lose the "contents list with current section highlighted". A hand-built,
-  tagging-safe contents frame is possible but more work — offer it as an option.
+- **Workaround:** drop the auto-outline, and **redefine `\section` itself** so the decks need
+  no edit at all. Snapshot ltx-talk's own `\section` with `\NewCommandCopy` (so the
+  redefinition delegates instead of recursing), then have it emit the section **and** a plain
+  section-divider frame showing the title (tagging-clean, verified):
+  ```latex
+  \NewCommandCopy{\ltxtalkorigsection}{\section}
+  \RenewDocumentCommand{\section}{s o m}{%
+    \IfBooleanTF{#1}{\ltxtalkorigsection*{#3}}{%        % \section*  -> silent, no divider
+      \IfValueTF{#2}{\ltxtalkorigsection[#2]{#3}}{\ltxtalkorigsection{#3}}%
+      \sectiondividerframe{#3}%
+    }%
+  }
+  ```
+  `\section{X}` and `\section[Short]{X}` keep working verbatim; `\section*{X}` is the escape
+  hatch for a section with no divider. You lose the "contents list with current section
+  highlighted". A hand-built, tagging-safe contents frame is possible but more work — offer it
+  as an option.
 - **Revisit when:** issue **#223** ("repeated TOC causes Link annotations…") and the 0.5.0
   section/TOC improvements land a tagging-safe `\tableofcontents`. The non-tagged docs claim
   current-section dimming already works — so this is specifically a *tagging* regression.
@@ -67,6 +80,53 @@ why they are absent from the upstream quick-start docs.
   `\begin{frame}[c]` then `\frametitle{Objectives}`. Renders correctly in the header.
 - **Do NOT** "fix" this by loading `frame-title-arg` → see C-MAKETITLE.
 - **Revisit when:** n/a — `\frametitle` is the documented primary form; keep using it.
+
+## C-FRAMETITLE-NESTED — the convert script silently skips nested-brace titles  ⚠ silent
+
+- **Symptom: none.** No error, no warning. The frame simply has **no title**: the text renders
+  as body text and the header stays empty. This is the nastiest failure mode in the whole
+  catalogue precisely because nothing tells you.
+- **Cause:** `scripts/convert_deck.py` matches frame titles with `[^{}]*`, which cannot see
+  **nested braces**. So it silently leaves behind both forms:
+  ```latex
+  \begin{frame}[c]{\only<1>{Example}\only<2>{Find a plan for}}   % single, nested
+  \begin{frame}[c]{Arc consistency}{{\sc Inference}}             % double, nested
+  ```
+  This shipped 10 title-less frames across three decks that had already been signed off as
+  "clean" — caught only later, by accident.
+- **Workaround:** run **`scripts/fix_frame_titles.py`** (a real brace matcher) after
+  `convert_deck.py`. It handles both the single and double forms.
+- **Always verify afterwards** — this must return nothing:
+  ```sh
+  grep -nE '^\s*\\begin\{frame\}(\[[^]]*\])?\{' deck.tex
+  ```
+- **Revisit when:** `convert_deck.py` grows a brace matcher of its own.
+
+## C-CENTER-ARG — `\center{…}` used as if it took an argument  ⚠ diagnosed nowhere near the fault
+
+- **Symptom:**
+  ```
+  tagpdf Error: number of automatic begin (N) and end (N-1) text-unit para hooks differ
+  ```
+  reported at `\end{frame}`, `\end{document}`, or some *unrelated later frame* — **never at the
+  offending line**. Cost a full day of bisection on one deck.
+- **Cause:** `\center`, `\centering`, `\raggedright` and `\raggedleft` are **declarations**
+  (`\center` is the internal *begin* of the `center` environment), not commands taking an
+  argument. Beamer tolerated `\center{X}` silently. Under tagging the stray group leaves a
+  paragraph opened and never closed, so the para-hook begin/end counts drift — and the error
+  surfaces wherever the imbalance is finally noticed.
+- **Workaround:** use the environment.
+  ```latex
+  \center{Some text}                      % WRONG — silent in beamer, fatal under tagging
+  \begin{center}Some text\end{center}     % right
+  ```
+  `scripts/convert_deck.py` rewrites `\center{…}` automatically (brace-matched, skips
+  comments) and warns if the braces are unbalanced.
+- **Detect before compiling** — `convert_deck.py --lint` flags it, or grep directly:
+  ```sh
+  grep -nE '\\(center|centering|raggedright|raggedleft)\{' deck.tex
+  ```
+- **Revisit when:** n/a — this was always a LaTeX misuse; tagging merely makes it fatal.
 
 ## C-MAKETITLE — `frame-title-arg` breaks `\maketitle`
 
@@ -97,7 +157,43 @@ why they are absent from the upstream quick-start docs.
   `fragile` options don't exist.
 - **Workaround:** use the `frame*` environment (`\begin{frame*} … \frametitle{…} …
   \end{frame*}`). It handles `\verb`/verbatim/`lstlisting` without external files.
+- ⚠ **`frame*` is necessary but NOT sufficient under tagging** — on its own it corrupts the
+  tag tree. See **C-FRAMESTAR-TAG** below; you must also suspend tagging around it.
+- ⚠ `scripts/convert_deck.py` rewrites the `\begin{frame}` but **not** the matching
+  `\end{frame}`. Every converted frame needs its `\end{frame}` → `\end{frame*}` by hand.
 - **Revisit when:** n/a — `frame*` is the documented mechanism.
+
+## C-FRAMESTAR-TAG — `frame*` + `listings` corrupts the tag tree  ⚠ highest impact
+
+- **Symptom:** `Package tagpdf Error: there is no open structure on the stack` at
+  `\end{frame*}`; `The number of automatic begin (N) and end (M) … differ`; poppler reports
+  `Mismatched EMC operator`; and downstream `Use of \??? doesn't match its definition` /
+  "Access to an entry beyond an array's bounds" at `\end{document}`. **70 errors** on one
+  real 68-page deck with 13 PDDL listings.
+- **Cause:** ltx-talk's `frame*` **re-tokenises its body** (`\tl_retokenize:n`, ltx-talk.cls
+  ~line 599) in order to handle verbatim. Under `\DocumentMetadata` that re-processing emits
+  unbalanced tagging structures, and `listings` — which is not tag-aware — cannot survive it.
+  Reproduces with `frame*` + `lstlisting` and *nothing else*.
+- **Workaround (verified: 0 errors, 0 warnings):** suspend tagging around the **entire
+  `frame*`**, via order-independent hooks in the preamble:
+  ```latex
+  \ExplSyntaxOn
+  \AddToHook{env/frame*/before}{\tag_stop:}
+  \AddToHook{env/frame*/after}{\tag_start:}
+  \ExplSyntaxOff
+  ```
+  Things that do **not** work, all tried:
+  - suspending only the `lstlisting` (rather than the whole `frame*`) — errors remain;
+  - `\SuspendTagging`/`\ResumeTagging` instead of `\tag_stop:`/`\tag_start:` — leaves a
+    nested/dangling marked-content unit at the frame boundary ("nested marked content",
+    "no mc to end", `Mismatched EMC`) and *re-introduces* structure errors when two `frame*`
+    are adjacent;
+  - adding tagging phases (`block`, phase-II, phase-III) — no effect;
+  - `\lstinputlisting` from an external file in a normal `frame` — still 2 errors.
+- **Trade-off:** the code/verbatim slide becomes an **artifact** — it is not in the
+  screen-reader reading order. If the code matters pedagogically, put an explanatory tagged
+  line *outside* the `frame*`.
+- **Revisit when:** ltx-talk's `frame*` stops re-tokenising, or `listings` becomes tag-aware.
 
 ## C-NOBEAMER — all `\usetheme`/`\setbeamer*`/`\usebeamerfont` are undefined
 
@@ -115,9 +211,21 @@ why they are absent from the upstream quick-start docs.
 
 - **Symptom:** maths looks different (sans) from Beamer's `\usefonttheme[onlymath]{serif}`.
 - **Cause:** ltx-talk defaults to all-sans, including `\mathrm`/`\textrm`.
-- **Workaround:** decide per project. To restore serif maths, load an appropriate maths font
-  package (pdfLaTeX) — test under tagging. XeLaTeX is **not** supported; LuaTeX needs Unicode
-  maths setup.
+- **Workaround:** decide per project. XeLaTeX is **not** supported; LuaTeX needs Unicode maths
+  setup. To restore the Beamer `\usefonttheme[onlymath]{serif}` look under **pdfLaTeX** (sans
+  body text, serif maths), re-point the four core maths symbol fonts back to Latin Modern
+  *after* `amssymb`. ltx-talk's pdfLaTeX path loads `sansmathfonts` + `lmodern[nomath]` and
+  sets `\rmdefault=\sfdefault`, which is what makes maths sans:
+  ```latex
+  \DeclareSymbolFont{operators}   {OT1}{lmr} {m}{n}
+  \DeclareSymbolFont{letters}     {OML}{lmm} {m}{it}
+  \DeclareSymbolFont{symbols}     {OMS}{lmsy}{m}{n}
+  \DeclareSymbolFont{largesymbols}{OMX}{lmex}{m}{n}
+  \SetSymbolFont{operators}{bold}{OT1}{lmr} {bx}{n}
+  \SetSymbolFont{letters}  {bold}{OML}{lmm} {b}{it}
+  \SetSymbolFont{symbols}  {bold}{OMS}{lmsy}{b}{n}
+  ```
+  Verified tagging-clean on a 20-deck course.
 - **Revisit when:** n/a — design choice.
 
 ## C-IMMATURE — blocks, theorems, media
@@ -177,23 +285,32 @@ why they are absent from the upstream quick-start docs.
 ## C-OVERLAY-ALGO — `\onslide{\State…}` corrupts algorithmicx block tracking
 
 - **Symptom:** `! Missing \endcsname inserted` / `! Extra \endcsname` at `\end{frame}` in
-  frames that use `\begin{algorithmic}` AND wrap `\State` (or `\Comment`) in an overlay
-  command: `\onslide<2>{\State formula}`.
+  frames that use `\begin{algorithmic}` AND wrap `\State` in an overlay command:
+  `\onslide<2>{\State formula}`. In practice this only bites when the wrapped `\State` sits
+  **nested inside** `\If`/`\ForAll`/`\Loop`; a top-level `\only<1>{\State …}` is harmless,
+  and an overlay inside a `\Function` *name* is fine.
 - **Cause:** algorithmicx tracks nesting depth with `\csname`-based counters
   (`\ALG@b@N@EndFor`, `\ALG@currentblock`). Wrapping `\State` in a group (`\onslide{…}`)
   scopes the push but not the pop of those counters, leaving them permanently mismatched.
   `\end{frame}` then sees unbalanced `\endcsname` pairs.
-- **Workaround:** use algorithmicx's **native overlay-spec syntax** — the `<spec>` argument
-  goes directly after the command name, with no braces around the full statement:
+- **Workaround:** keep the **structural token at the top level** and wrap only its
+  *content* — the same principle as C-OVERLAY-ALIGN:
   ```latex
-  % Instead of: \onslide<2>{\State $x \gets y$  \Comment{note}}
-  \State<2> $x \gets y$      % shows \State on step 2+
-  \Comment<2>{note}          % shows \Comment on step 2+
+  % Instead of: \onslide<2>{\State $x \gets y$ \Comment{note}}
+  \State \onslide<2>{$x \gets y$ \Comment{note}}   % 0 errors, overlay preserved
   ```
-  Wrapping a **balanced** `\If{…}\EndIf` pair (both the begin and end hidden together) in
-  `\onslide{…}` is safe because both push and pop are hidden together. Only wrapping a single
-  `\State` (or one side of a matching pair) is unsafe.
-- **Revisit when:** n/a — the native overlay-spec syntax is the intended API.
+  `\State` is then always executed (so push/pop stay balanced) and only the text appears or
+  disappears. Wrapping a **balanced** `\If{…}\EndIf` pair in `\onslide{…}` is also safe,
+  because both push and pop are hidden together.
+- ⚠ **Do NOT use `\State<2> …`.** An earlier version of this entry recommended the
+  "native overlay-spec syntax". **It does not work** under ltx-talk 0.5.1 + classic
+  `algpseudocode` (the engine C-ALGO forces you onto): the `<2>` is *silently swallowed* —
+  it compiles with zero errors and zero warnings, and the line then renders on **every**
+  slide, destroying the progressive reveal. Verified: `\State<2>` → 1 page (no overlay);
+  `\onslide<2>{\State}` → 2 pages but 30 `\endcsname` errors; `\State \onslide<2>{…}` →
+  2 pages, 0 errors. Classic `algpseudocode` is simply not overlay-aware; only beamer
+  patched it to be.
+- **Revisit when:** ltx-talk (or algorithmicx) grows real overlay-spec support on `\State`.
 
 ## C-DISPMATH-NEWLINE — `\\` after display math is invalid
 
@@ -205,13 +322,114 @@ why they are absent from the upstream quick-start docs.
   (paragraph break).
 - **Revisit when:** n/a — this is a fundamental LaTeX constraint.
 
+## C-CALL-NEST — classic `\Call` cannot nest  (bites *after* the C-ALGO engine swap)
+
+- **Symptom:** `! Argument of \equal has an extra }` / `! Paragraph ended before \equal was
+  complete`, raised at `\end{frame}`. Nothing in your source mentions `\equal`.
+- **Cause:** classic `algpseudocode` defines
+  `\Call{#1}{#2}` as `\textproc{#1}\ifthenelse{\equal{#2}{}}{}{(#2)}`. A **nested `\Call`
+  inside `#2`** breaks the `\equal` test:
+  `\Call{Or-Search}{$p.\Call{Initial-State}{}$}`. `algpseudocodex`'s `\Call` nests fine — so
+  this only appears *because* C-ALGO forced you onto the classic engine.
+- **Workaround:** drop the emptiness test; always emit parentheses (this is also what
+  algpseudocodex renders, e.g. `Initial-State()`):
+  ```latex
+  \algrenewcommand\Call[2]{\textproc{#1}(#2)}
+  ```
+- **Revisit when:** n/a.
+
+## C-ALGO-FLOAT — the `algorithm` float is not registered for tagging
+
+- **Symptom:** `! Undefined control sequence … \l__tag_name_float/algorithm_tl`.
+- **Cause:** `\begin{algorithm}` (the float from the `algorithm` package) is not known to the
+  tagging float module. Bare `algorithmic` — the common case — is unaffected.
+- **Workaround:** **remove the float wrapper**, keeping the pseudocode as bare (still tagged)
+  `algorithmic` with a bold caption line. Suspending tagging around the float
+  (`\AddToHook{env/algorithm/before}{\tag_stop:}`) also compiles, but makes the pseudocode an
+  artifact *and* did not clear the error in practice — prefer removal.
+- **Revisit when:** the float tagging module learns custom float types.
+
+## C-NATIVE-ENVS — ltx-talk *already* provides `columns`/`column`/`block`/`frame*`
+
+- **Symptom:** `Command \columns already defined` (or silently worse behaviour) if you paste
+  in this skill's own preamble stubs.
+- **Cause:** `assets/preamble-template.tex` defines minipage/tcolorbox **stubs** for
+  `columns`, `column` and `block`. Under ltx-talk 0.5.1 these are **native**
+  (`ltx-talk.cls` lines 1074, 1141, 2134, 997) and the stubs clash.
+- **Workaround:** use the native environments; **do not copy those stubs in**. The template's
+  stub block is only for a kernel-class setting where they genuinely don't exist.
+- **Revisit when:** the template is fixed.
+
+## C-THEOREM — no theorem environments
+
+- **Symptom:** `LaTeX Error: Environment definition undefined` at `\begin{definition}`.
+- **Cause:** Beamer's *theme* supplied `definition`/`theorem`/`example`/…; ltx-talk does not,
+  and its `\newtheorem` is incomplete (issue #219).
+- **Workaround:** build them with **tcolorbox** — not ltx-talk's native `\block` (which
+  collides with algorithmicx's csname stack, C-BLOCK-ALGO). `[auto counter]` keeps
+  `\label`/`\ref` working:
+  ```latex
+  \usepackage{tcolorbox}
+  \newtcolorbox[auto counter]{definition}[1][]{title=Definition~\thetcbcounter, ...}
+  ```
+
+## C-OLDFONT — `\sc`, `\it`, `\bf` … are undefined (and may sit inside maths)
+
+- **Symptom:** `Undefined control sequence` on `\sc`; or, once stubbed naively,
+  `LaTeX Error: Command \scshape invalid in math mode`.
+- **Cause:** the standard classes still define the obsolete two-letter font commands;
+  **ltx-talk does not**. Old decks use them freely — including *inside maths*
+  (`$X_i.{\sc Neighbors}$`), where a text-shape switch is illegal.
+- **Workaround:** `\ifmmode`-guarded stubs (no-op in maths):
+  ```latex
+  \providecommand{\sc}{\ifmmode\else\scshape\fi}   % likewise \it \bf \rm \sf \tt \sl
+  ```
+
+## C-BACKGROUND — no `\usebackgroundtemplate`
+
+- **Symptom:** `Undefined control sequence` at `\usebackgroundtemplate`.
+- **Cause:** ltx-talk has no equivalent.
+- **Workaround:** an overlay tikz node. ⚠ **A no-op stub is dangerous**: these frames
+  typically carry *white text over a dark image*, so silently dropping the background makes
+  the text invisible rather than merely unstyled.
+  ```latex
+  \begin{tikzpicture}[remember picture,overlay]
+    \node at (current page.center) {\includegraphics[width=\paperwidth]{img.pdf}};
+  \end{tikzpicture}
+  ```
+
+## C-EDITINSTANCE-EXPAND — template colour keys don't expand macros
+
+- **Symptom:** `LaTeX Error: Unknown color '\ThemeAccent'` — repeated once per frame.
+- **Cause:** `\EditInstance{header}{std}{background-color=\ThemeAccent}` — the kernel template
+  colour keys want a literal colour **name** and do not expand a macro.
+- **Workaround:** write the colour name out. (An *empty* `background-color=` draws no bar at
+  all — that is how you get a minimalist, Pittsburgh-like bar-less header.)
+
 ---
 
 ## Quick error → cause map
 
+> ⚠ **The worst failures in this catalogue produce NO error at the offending line.**
+> Run **`convert_deck.py --lint`** before every build — it greps for all of these:
+> | Silent failure | Symptom | Entry |
+> |---|---|---|
+> | Nested-brace frame title left unconverted | frame has **no title**; text lands in the body | C-FRAMETITLE-NESTED |
+> | `\State<2>` used as an overlay spec | overlay **silently dropped**; line shows on every slide | C-OVERLAY-ALGO |
+> | `\center{…}` used as a command | tag tree corrupts; error lands **far away**, or in another frame | C-CENTER-ARG |
+> | `\includegraphics` without `alt=` | screen reader reads out **the filename** | see `alt-text.md` |
+
 | Error text | Cause | Entry |
 |---|---|---|
 | `Improper \halign inside $$'s` | algpseudocodex algorithm | C-ALGO |
+| `tagpdf Error: no open structure on the stack` at `\end{frame*}` | `frame*` + `listings` under tagging | C-FRAMESTAR-TAG |
+| `Argument of \equal has an extra }` | nested `\Call` (classic algpseudocode) | C-CALL-NEST |
+| `Undefined control sequence \l__tag_name_float/algorithm_tl` | `algorithm` **float** | C-ALGO-FLOAT |
+| `Environment definition undefined` at `\begin{definition}` | no theorem envs | C-THEOREM |
+| `Undefined control sequence \sc` / `\scshape invalid in math mode` | obsolete font commands | C-OLDFONT |
+| `Undefined control sequence \usebackgroundtemplate` | no background templates | C-BACKGROUND |
+| `Unknown color '\ThemeAccent'` (once per frame) | template key won't expand a macro | C-EDITINSTANCE-EXPAND |
+| `Command \columns already defined` | pasted the template's stubs; they're native | C-NATIVE-ENVS |
 | `Improper \halign inside $'s` | overlay around `&`/`\\` in `tabular`/`align*` | C-OVERLAY-ALIGN |
 | `Misplaced alignment tab character &` | overlay around `&` in `tabular` | C-OVERLAY-ALIGN |
 | `You can't use \halign in math mode` | multi-line `\State{…\\…}` (algpseudocodex) | C-ALGO |
@@ -219,6 +437,7 @@ why they are absent from the upstream quick-start docs.
 | `Missing \endcsname` / `Extra \endcsname` at `\end{frame}` | `\onslide{\State…}` in algorithmic | C-OVERLAY-ALGO |
 | `There's no line here to end` | `\\` after display math | C-DISPMATH-NEWLINE |
 | `tagpdf Error: … begin/end … differ` / `Sect can not be closed` | `\tableofcontents` | C-TOC |
+| `tagpdf Error: … begin/end text-unit para hooks differ` (line looks innocent) | `\center{…}` as a command | C-CENTER-ARG |
 | `Not allowed in LR mode` at `\maketitle` | `frame-title-arg` option set | C-MAKETITLE |
 | frame title appears as body text | braced title, no `\frametitle` | C-FRAMETITLE |
 | `not compatible with \DocumentMetadata` | class still `beamer` | switch class |

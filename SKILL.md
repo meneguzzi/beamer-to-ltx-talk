@@ -27,12 +27,33 @@ the upstream docs because they only surface under *tagging* (`\DocumentMetadata`
 > **Companion references (read before doing anything):**
 > - `references/compromises.md` — the catalogue of incompatibilities, with symptom, cause,
 >   workaround, and "revisit when". **This is the heart of the skill.**
+> - `references/alt-text.md` — how to write the alt text (Step 6). Tagging without alt text
+>   is not accessibility.
 > - `assets/preamble-template.tex` — the deployable ltx-talk shared preamble (copy to the project and fill in the Identity and ThemeAccent blocks at the top).
 > - `scripts/convert_deck.py` — the pattern-based source transformer (frametitles,
 >   sections, title page, verbatim frames, empty titles).
+> - `scripts/fix_frame_titles.py` — **must be run after `convert_deck.py`**; it catches the
+>   nested-brace frame titles that `convert_deck.py` skips *silently* (C-FRAMETITLE-NESTED).
+> - `scripts/alt_text_audit.py` / `scripts/alt_text_apply.py` — the alt-text worklist.
 > - The sibling `latex-beamer` skill's `references/ltx-talk.md` has general ltx-talk syntax
 >   (overlays, columns, templates). Use it for *how ltx-talk works*; use this skill for
 >   *how to convert*.
+
+> ### ⚠ Four failures in this skill produce NO usable error message
+> They will not show up in a log (or point anywhere near the fault), and "it compiled" means
+> nothing. **`convert_deck.py --lint` greps for all four — run it before every build.**
+> 1. **Nested-brace frame titles** left unconverted → the frame has *no title*; the text
+>    renders as body text (C-FRAMETITLE-NESTED). Run `fix_frame_titles.py`, then grep.
+> 2. **`\State<2>`** used as an algorithm overlay spec → the overlay is *silently dropped*
+>    and the line shows on every slide (C-OVERLAY-ALGO). Use `\State \onslide<2>{…}`.
+> 3. **`\center{…}`** used as if it took an argument → it is a *declaration*; under tagging it
+>    leaks an unclosed paragraph and the error is reported **nowhere near** the offending line
+>    (C-CENTER-ARG). Cost a full day of bisection. Use `\begin{center}…\end{center}`.
+> 4. **Images without `alt=`** → a screen reader reads out *the filename*.
+>
+> Also: **measure against a build that actually ran.** Beamer + `\DocumentMetadata` is fatal,
+> so a half-migrated repo can leave stale PDFs lying around, and `pdfinfo` will happily read
+> them and give you a confident, wrong baseline.
 
 ---
 
@@ -89,12 +110,28 @@ Start from `assets/preamble-template.tex`. It already:
 - rebuilds the visual style via the kernel template system (`\EditInstance{header}{std}{…}`,
   `{footer}{std}{…}`);
 - uses the **classic `algpseudocode`** engine, never `algpseudocodex` (see compromises);
-- defines `\heading{…}` (section + tagging-safe divider) and `\coursetitlepage{…}{…}{…}`.
+- **redefines `\section`** so it emits the section *and* a tagging-safe divider frame — the
+  decks keep their original `\section{…}` lines untouched (`\section*{…}` opts out of the
+  divider); and defines `\coursetitlepage{…}{…}{…}`.
 
 Port from the old preamble: colour definitions, `\definecolor`s, custom math macros, the
 `\emph` redefinition, `hyperref` metadata, author/institute. **Drop**: `\usetheme`, every
-`\setbeamer*`, `\usefonttheme` (decide on maths fonts — ltx-talk maths is sans by default),
-`media9`/`multimedia` unless needed, and any Beamer-internal patch files.
+`\setbeamer*`, `\usefonttheme` (decide on maths fonts — ltx-talk maths is sans by default;
+`references/compromises.md` C-FONTS has a working serif recipe), `media9`/`multimedia` unless
+needed, and any Beamer-internal patch files.
+
+⚠ **Do not paste in the template's `columns`/`column`/`block` stubs.** ltx-talk provides all
+of them **natively** — the stubs clash (C-NATIVE-ENVS). They are in the template only for a
+kernel-class setting where they genuinely don't exist.
+
+Also add, up front, the things every real deck turns out to need (all catalogued):
+the `frame*` tagging hooks (**C-FRAMESTAR-TAG** — without these, listings destroy the tag
+tree), the nesting-safe `\Call` (**C-CALL-NEST**), tcolorbox theorem environments
+(**C-THEOREM**), and `\ifmmode`-guarded `\sc`/`\it`/`\bf` stubs (**C-OLDFONT**).
+
+The ltx-talk preamble **requires** `\DocumentMetadata` (it uses `\tag_stop:`, `\EditInstance`).
+It is a **one-for-one replacement** for the Beamer preamble — load one or the other, never
+both, or you get `Undefined control sequence` at `\usetheme`.
 
 Keep the `\DocumentMetadata{…}` block (it must be the very first thing, before
 `\documentclass`). Tagging works with `pdfstandard=a-4` and a `testphase` of `phase-I`
@@ -114,7 +151,8 @@ patterns, never content. It performs:
 | Frame titles | `\begin{frame}[opts]{Title}` | `\begin{frame}[opts]` + `\frametitle{Title}` | braced titles otherwise render as **body text** |
 | Empty titles | `\begin{frame}[c]{}` | `\begin{frame}[c]` | drops the stray group |
 | Double titles | `\begin{frame}{A}{B}` | `\frametitle{A --- B}` | Beamer subtitle → folded in; **warns** |
-| Sections | `\section{X}` | `\heading{X}` | divider frame; **warns** TOC outline is lost |
+| Sections | *(left as-is)* | *(left as-is)* | the preamble's redefined `\section` emits the divider; the script only strips `\AtBeginSection` and **warns** the TOC outline is lost |
+| Centring | `\center{X}` | `\begin{center}X\end{center}` | C-CENTER-ARG — a declaration, not a command; fatal under tagging |
 | Verbatim frames | `[…,containsverbatim]{T}` | `\begin{frame*}` + `\frametitle{T}` | |
 | Title frame | `\maketitle` + trailing centred text | `\coursetitlepage{…}{…}{…}` | usually needs a **manual** finish |
 
@@ -123,8 +161,42 @@ summary of every change and every warning. Things it deliberately leaves for you
 hand (because they need judgement): the title-page content, folding double titles, and
 anything inside a frame body.
 
+**Then run the second pass — it is not optional:**
+```sh
+python3 scripts/fix_frame_titles.py deck.tex
+```
+`convert_deck.py` matches titles with `[^{}]*`, so it **silently skips** any title containing
+nested braces (`{\only<1>{A}\only<2>{B}}`, `{Title}{{\sc Sub}}`). Those frames then render
+with **no title at all**, with no error and no warning (C-FRAMETITLE-NESTED). Verify:
+```sh
+grep -nE '^\s*\\begin\{frame\}(\[[^]]*\])?\{' deck.tex     # must return nothing
+```
+
+**Two more things the script does not do**, and you must:
+- **`\end{frame}` → `\end{frame*}`.** It rewrites the `\begin` of a verbatim frame but not
+  its matching `\end`. Pair them up (count: `grep -c` each — they must match).
+- **The title page.** Replace the `\maketitle` frame with `\coursetitlepage{…}{…}{…}`.
+
 After scripting, also swap the preamble `\input` (`common-packages.tex` → `ltx-common.tex`)
 and remove the now-invalid `\AtBeginSection` block and Beamer patch inputs.
+
+---
+
+## Step 2b — Lint BEFORE you compile (cheap; catches what the compiler cannot)
+
+```sh
+python3 scripts/convert_deck.py deck.tex --lint     # exit 1 if anything is flagged
+```
+The two costliest bugs in a real 20-deck migration were **invisible to the compiler**: a
+braced frame title renders as body text with no error at all, and `\center{…}` corrupts the
+tag tree with an error reported *nowhere near* the offending line (a full day of bisection).
+Both are pure source greps needing no build — so run this on every deck, every time, and get
+to zero before spending a compile.
+
+It flags: unconverted braced frame titles (C-FRAMETITLE / C-FRAMETITLE-NESTED), `\center{…}`
+and friends (C-CENTER-ARG), `\State<n>` silent overlays (C-OVERLAY-ALGO), leftover
+`\tableofcontents` (C-TOC), Beamer-only commands (C-NOBEAMER, C-BACKGROUND), `algpseudocodex`
+(C-ALGO), and the `algorithm` float (C-ALGO-FLOAT).
 
 ---
 
@@ -140,8 +212,9 @@ Then triage against `references/compromises.md`. The signatures you will most li
   uses classic `algpseudocode`; that alone fixes it. (Do **not** chase `varwidth`/minipage/
   SuspendTagging rabbit holes — they do not work; the engine swap does.)
 - **`tagpdf Error: number of automatic begin/end … differ` / `structure Sect can not be
-  closed`** → a `\tableofcontents`. Replace with `\heading` dividers (the script does this
-  for sections; remove any standalone outline frames).
+  closed`** → a `\tableofcontents`. Remove it; the preamble's redefined `\section` already
+  emits a divider frame per section (the script strips `\AtBeginSection`, but delete any
+  standalone outline frames by hand).
 - **`Not allowed in LR mode` at `\maketitle`** → the `frame-title-arg` class option is set.
   Remove it; braced titles still work once converted to `\frametitle`.
 - **`Class beamer Error: not compatible with \DocumentMetadata`** → the class line wasn't
@@ -153,17 +226,25 @@ Iterate until `latexmk` exits 0.
 
 ## Step 4 — Verify (don't trust "it compiled")
 
-For each converted deck confirm:
+For each converted deck confirm **all four** — the third one has no error message and is the
+one people miss:
 ```sh
-pdfinfo deck.pdf | grep -E 'Pages|Tagged'        # Tagged: yes, pages == baseline
-grep -c 'tagpdf Error'  deck.log                  # must be 0 (Warnings are OK)
-grep -c 'tagpdf Warning' deck.log                 # mostly "missing alt text" — list them
-pdftoppm -png -r 70 -f 1 -l 4 deck.pdf /tmp/new    # eyeball title, a heading, a columns frame
+pdfinfo deck.pdf | grep -E 'Pages|Tagged'                  # Tagged: yes, pages == baseline
+grep -c 'tagpdf Error' deck.log                            # must be 0 (Warnings are OK)
+grep -nE '^\s*\\begin\{frame\}(\[[^]]*\])?\{' deck.tex     # must be EMPTY: title-less frames
+grep -c 'Alternative text for graphic is missing' deck.log # -> 0 after Step 6
+pdftoppm -png -r 70 -f 1 -l 4 deck.pdf /tmp/new            # eyeball title/heading/columns
 ```
 - **Slide page count == baseline.** A mismatch means a frame dropped or split — investigate.
+  But first make sure your **baseline build actually ran**: Beamer + `\DocumentMetadata` is
+  fatal, so in a half-migrated repo `pdfinfo` may be reading a **stale PDF** and handing you a
+  confident, wrong number.
 - **`Tagged: yes`** and **0 tagpdf Errors**.
 - Spot-check the title page, a section divider, a columns/figure frame, and an algorithm
   frame against the reference renders.
+
+For a course, wire this into a `check` build target so it fails on *unsound* output, not just
+on a failed compile.
 
 ---
 
@@ -179,7 +260,36 @@ and stays `Tagged: yes`.
 
 ---
 
-## Step 6 — Conversion report (always deliver this)
+## Step 6 — Alt text (this is the point of the migration)
+
+A tagged PDF whose figures are unlabelled is **not accessible**. `tagpdf` warns once per bare
+`\includegraphics` — "Alternative text for graphic is missing … Using 'images/x.pdf' instead"
+— which means a screen reader reads out **the filename**. Do not stop at `Tagged: yes`.
+
+Read `references/alt-text.md`. In short:
+
+```sh
+# 1. collect: find unlabelled images, RENDER each one, harvest its LaTeX context
+python3 scripts/alt_text_audit.py week*/deck*.tex --render-dir /tmp/alt --json alt.json
+
+# 2. for each entry: LOOK at preview_png, read its context, fill the "alt" field
+
+# 3. inject (idempotent; skips entries still empty, so you can work in batches)
+python3 scripts/alt_text_apply.py alt.json
+
+# 4. verify
+grep -c 'Alternative text for graphic is missing' deck.log     # -> 0
+```
+
+You need **both inputs**. The rendered image gives the figure's *content* (node labels, axis
+labels); the LaTeX context gives its *role in the argument*. Context alone yields "a search
+tree"; the image alone misses why the slide shows it. **Never write alt text from the
+filename or the frame title without viewing the image.**
+
+**Alt text is pedagogy, not metadata** — it decides what a blind student learns from the
+slide. Generated alt text is a **draft for the author to review**, never a silent commit.
+
+## Step 7 — Conversion report (always deliver this)
 
 End with a short report per deck:
 - ltx-talk version targeted, and any upstream fixes you adopted because of Step 0.2.

@@ -105,6 +105,23 @@
 \newcommand{\pdfpcnote}[1]{}
 \newcommand{\note}[2][]{}    %% beamer \note[item]{text} / \note{text}
 
+%% ###########################################################################
+%% ##  STOP.  DO NOT USE THE STUBS BELOW WITH ltx-talk.                     ##
+%% ##                                                                        ##
+%% ##  ltx-talk provides columns / column / block / frame* NATIVELY          ##
+%% ##  (ltx-talk.cls lines 1074, 1141, 2134, 997). Defining these stubs on   ##
+%% ##  top of it CLASHES ("Command \columns already defined").               ##
+%% ##  See compromises.md -> C-NATIVE-ENVS.                                  ##
+%% ##                                                                        ##
+%% ##  Use the native environments. The stubs are kept only for a plain      ##
+%% ##  kernel-class setting where they genuinely do not exist.               ##
+%% ##                                                                        ##
+%% ##  If you DO need theorem-like environments, ltx-talk has none: build    ##
+%% ##  them with tcolorbox (C-THEOREM), NOT with the native \block, which    ##
+%% ##  collides with algorithmicx's csname stack (C-BLOCK-ALGO).             ##
+%% ###########################################################################
+\iffalse   %% <-- stubs disabled; delete this \iffalse...\fi only for a non-ltx-talk class
+
 %% ---------------------------------------------------------------------------
 %% Beamer-compatibility stubs — constructs beamer provided that ltx-talk does
 %% not offer natively. See also: compromises.md entries COLS-01 and BOX-01.
@@ -153,6 +170,54 @@
   left=4pt, right=4pt, top=2pt, bottom=2pt,
 }
 
+\fi   %% <-- end of the disabled Beamer-compatibility stubs (see C-NATIVE-ENVS)
+
+%% ---------------------------------------------------------------------------
+%% Things every real ltx-talk conversion turns out to need. Unlike the stubs
+%% above, these are ACTIVE — each is a compromises.md entry paid for in blood.
+%% ---------------------------------------------------------------------------
+
+%% C-FRAMESTAR-TAG: ltx-talk's frame* re-tokenises its body, which under
+%% \DocumentMetadata corrupts the tag tree as soon as a listing appears in it
+%% (70 errors on one real deck). Suspend tagging around the WHOLE frame*.
+%% Use \tag_stop:/\tag_start:, NOT \SuspendTagging (which leaves a dangling
+%% marked-content unit and breaks again on adjacent frame*).
+%% Trade-off: verbatim slides become artifacts, i.e. not in the reading order.
+\ExplSyntaxOn
+\AddToHook{env/frame*/before}{\tag_stop:}
+\AddToHook{env/frame*/after}{\tag_start:}
+%% C-ALGO-FLOAT: the `algorithm' float is not registered with the tagging float
+%% module. (Better still: drop the float and keep bare, tagged `algorithmic'.)
+\AddToHook{env/algorithm/before}{\tag_stop:}
+\AddToHook{env/algorithm/after}{\tag_start:}
+\ExplSyntaxOff
+
+%% C-CALL-NEST: classic \Call is \textproc{#1}\ifthenelse{\equal{#2}{}}{}{(#2)},
+%% and \equal cannot cope with a nested \Call in #2. Always emit parentheses.
+\algrenewcommand\Call[2]{\textproc{#1}(#2)}
+
+%% C-OLDFONT: ltx-talk does not define the obsolete two-letter font commands,
+%% and decks use them inside maths too, where a text-shape switch is illegal.
+\providecommand{\sc}{\ifmmode\else\scshape\fi}
+\providecommand{\it}{\ifmmode\else\itshape\fi}
+\providecommand{\bf}{\ifmmode\else\bfseries\fi}
+\providecommand{\rm}{\ifmmode\else\rmfamily\fi}
+\providecommand{\sf}{\ifmmode\else\sffamily\fi}
+\providecommand{\tt}{\ifmmode\else\ttfamily\fi}
+\providecommand{\sl}{\ifmmode\else\slshape\fi}
+
+%% C-FONTS: ltx-talk's pdfLaTeX path loads sansmathfonts + lmodern[nomath] and
+%% sets \rmdefault=\sfdefault, so MATHS is sans. Uncomment to restore serif
+%% maths with sans body text (i.e. beamer's \usefonttheme[onlymath]{serif}).
+%% Must come after amssymb.
+% \DeclareSymbolFont{operators}   {OT1}{lmr} {m}{n}
+% \DeclareSymbolFont{letters}     {OML}{lmm} {m}{it}
+% \DeclareSymbolFont{symbols}     {OMS}{lmsy}{m}{n}
+% \DeclareSymbolFont{largesymbols}{OMX}{lmex}{m}{n}
+% \SetSymbolFont{operators}{bold}{OT1}{lmr} {bx}{n}
+% \SetSymbolFont{letters}  {bold}{OML}{lmm} {b}{it}
+% \SetSymbolFont{symbols}  {bold}{OMS}{lmsy}{b}{n}
+
 %% hyperref metadata. With \DocumentMetadata active hyperref is already loaded;
 %% we only adjust its settings here.
 \hypersetup{
@@ -186,32 +251,61 @@
 %% ---------------------------------------------------------------------------
 %% Visual style via ltx-talk templates
 %% ---------------------------------------------------------------------------
+%% C-EDITINSTANCE-EXPAND: the kernel template colour keys want a literal colour
+%% NAME and will NOT expand a macro — passing \ThemeAccent directly gives
+%% "Unknown color '\ThemeAccent'", once per frame. \colorlet turns the macro
+%% into a real named colour, so the indirection above still works.
+\colorlet{themeaccent}{\ThemeAccent}
+\colorlet{themeaccenttext}{\ThemeAccentText}
+
 \EditInstance{header}{std}{
-  background-color = \ThemeAccent,
-  color            = \ThemeAccentText,
+  background-color = themeaccent,
+  color            = themeaccenttext,
 }
 \EditInstance{footer}{std}{
-  background-color = \ThemeAccent,
-  color            = \ThemeAccentText,
+  background-color = themeaccent,
+  color            = themeaccenttext,
   element-order    = {author, title, framenumber},
   separator        = \hfill,
   left-hspace      = 3mm,
   right-hspace     = 3mm,
 }
 
-%% Section dividers.
+%% Tip: an EMPTY `background-color =' draws no bar at all — that is how you get
+%% a minimalist, bar-less (Pittsburgh-like) header with a coloured frame title.
+
+%% ---------------------------------------------------------------------------
+%% C-TOC: Section dividers, without touching the decks.
 %%
 %% The old decks opened each section with an \AtBeginSection outline frame
 %% (\tableofcontents[currentsection]). In ltx-talk 0.5.0 \tableofcontents
 %% corrupts the PDF tag tree (mismatched para/text-unit hooks) and cannot be
 %% produced as tagged output, so we cannot reproduce that outline as-is.
 %%
-%% Instead, \heading{Title} starts the section AND emits a clean, tagging-safe
-%% divider frame showing the section title. Replace \section{Title} with
-%% \heading{Title} in the decks. (Plain \section{...} still works if you want a
-%% silent section with no divider.)
-\newcommand{\heading}[1]{%
-  \section{#1}%
+%% Instead we REDEFINE \section itself to emit the section AND a clean,
+%% tagging-safe divider frame. The decks keep their original \section{Title}
+%% lines verbatim — no source edit, and no new macro to remember:
+%%
+%%   \section{Title}      section + divider frame   (the beamer habit)
+%%   \section[Short]{Title}  ditto; Short goes to the TOC/navigation metadata
+%%   \section*{Title}     section, NO divider frame (silent, escape hatch)
+%%
+%% \NewCommandCopy takes a snapshot of ltx-talk's own \section first, so the
+%% redefinition delegates to it rather than recursing.
+%% ---------------------------------------------------------------------------
+\NewCommandCopy{\ltxtalkorigsection}{\section}
+\RenewDocumentCommand{\section}{s o m}{%
+  \IfBooleanTF{#1}{%
+    %% starred: silent section, no divider
+    \ltxtalkorigsection*{#3}%
+  }{%
+    \IfValueTF{#2}{\ltxtalkorigsection[#2]{#3}}{\ltxtalkorigsection{#3}}%
+    \sectiondividerframe{#3}%
+  }%
+}
+
+%% The divider frame itself — restyle this and every section page follows.
+\newcommand{\sectiondividerframe}[1]{%
   \begin{frame}%
     \vfill
     \begin{center}
@@ -220,3 +314,8 @@
     \vfill
   \end{frame}%
 }
+
+%% Back-compat only: earlier versions of this skill told you to rewrite \section{X}
+%% into \heading{X}. Decks converted then still say \heading. New decks should just
+%% use \section.
+\newcommand{\heading}[1]{\section{#1}}
