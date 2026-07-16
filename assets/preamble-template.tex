@@ -233,19 +233,34 @@
 %% also lets us make the (otherwise bare) title slide our own.
 %%
 %%   \coursetitlepage{<main title>}{<subtitle>}{<attribution>}
+%%
+%% C-AND-TITLE: \AuthorLong holds "A \and B" (that is what \author wants). But
+%% \and is NOT a separator — LaTeX defines it as
+%%     \end{tabular}\hskip 1em \plus.17fil \begin{tabular}[t]{c}
+%% i.e. it is only legal INSIDE \author/\maketitle, where a tabular is already
+%% open. Typesetting \AuthorLong in running text therefore rips open an
+%% alignment and detonates: "Misplaced \crcr", "Missing } inserted", 101 errors
+%% on one real deck, all reported at \end{frame} — nowhere near the title page.
+%% So we rebind \and to a plain gap for the duration of the title frame.
+%%
+%% Note the whole frame avoids \\ as a line break too: \par + \vspace is the
+%% tagging-safe way to stack centred lines.
 %% ---------------------------------------------------------------------------
 \newcommand{\coursetitlepage}[3]{%
+  \begingroup
+  \renewcommand{\and}{\qquad}%   <-- C-AND-TITLE: \and is illegal outside \author
   \begin{frame}
     \centering
     \vfill
-    {\color{\ThemeAccent}\Huge\bfseries #1}\\[0.5em]
-    {\Large #2}\\[2.5em]
-    {\large \AuthorLong}\\[0.4em]
-    {\small\ttfamily \AuthorEmails}\\[0.4em]
-    \InstLong\\[2.5em]
+    {\color{\ThemeAccent}\Huge\bfseries #1}\par\vspace{0.5em}
+    {\Large #2}\par\vspace{2.5em}
+    {\large \AuthorLong}\par\vspace{0.4em}
+    {\small\ttfamily \AuthorEmails}\par\vspace{0.4em}
+    \InstLong\par\vspace{2.5em}
     {\small #3}%
     \vfill
   \end{frame}%
+  \endgroup
 }
 
 %% ---------------------------------------------------------------------------

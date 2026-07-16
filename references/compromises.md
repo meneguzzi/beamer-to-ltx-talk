@@ -149,6 +149,56 @@ why they are absent from the upstream quick-start docs.
   slot. Keep `\title`/`\author` as metadata for the footer/PDF info.
 - **Revisit when:** a full title-page template ships (known limitation in 0.5.0).
 
+## C-NO-DOCMETA — a deck that never sets `\DocumentMetadata` half-loads ltx-talk  ⚠ cascade of "undefined"
+
+- **Symptom:** dozens of `! Undefined control sequence` on ordinary commands (`\institute`,
+  `\hypersetup`, `\frametitle`), `! LaTeX Error: The font size command \normalsize is not
+  defined`, `! Environment frame* undefined`, `\begin{document} ended by \end{frame*}`. The
+  deck emits a stub PDF (2–8 pages). Nothing names the real cause.
+- **Cause:** ltx-talk **requires** `\DocumentMetadata` (set before `\documentclass`). Real
+  decks sometimes ship it commented out — e.g. `% \input{../tag-commands.tex}` — from a
+  pre-tagging build. Without it the class only half-initialises, so huge swathes of it
+  (including its own `frame*` and font machinery) are never defined.
+- **Workaround:** activate it. Uncomment the metadata input (or add a literal
+  `\DocumentMetadata{…}`) as the very first line, before `\documentclass`. On the CS3033
+  course this single-line change took three "totally broken" decks straight to
+  `Tagged: yes`, page counts matching baseline.
+- **Detect before compiling:** `convert_deck.py` warns (`C-NO-DOCMETA`) during both `--lint`
+  and conversion when no `\DocumentMetadata` is reachable before `\documentclass`.
+- **Revisit when:** ltx-talk starts erroring clearly on a missing `\DocumentMetadata` instead
+  of half-loading.
+
+## C-AND-TITLE — `\and` in a custom title page detonates  ⚠ 101 errors, none near the fault
+
+- **Symptom:** `! Misplaced \crcr.` (inside `\tbl_crcr:n`), `! Missing } inserted`,
+  `! Extra }, or forgotten \endgroup` — **101 errors on one real deck**, every one reported at
+  `\end{frame}` or `\end{document}`, none of them at the title page that actually caused it.
+  Removing the attribution text, the `\\` line breaks, even emptying the argument entirely,
+  changes nothing — which sends you hunting in the wrong file for hours.
+- **Cause:** `\author{A \and B}` is idiomatic, so `\AuthorLong` naturally holds `A \and B`.
+  But **`\and` is not a separator** — LaTeX defines it as
+  `\end{tabular}\hskip 1em \plus.17fil \begin{tabular}[t]{c}`. It is only legal *inside*
+  `\author`/`\maketitle`, where a `tabular` is already open. A custom title frame that
+  typesets `\AuthorLong` in running text therefore **closes a tabular that was never opened**,
+  ripping an alignment apart. The tagging table module (`\tbl_crcr:n`) is what finally
+  reports it, which is why the error looks like a tagging bug and is not one.
+- **Workaround:** rebind `\and` for the duration of the title frame:
+  ```latex
+  \newcommand{\coursetitlepage}[3]{%
+    \begingroup
+    \renewcommand{\and}{\qquad}%   <-- without this, 101 errors
+    \begin{frame} ... {\large \AuthorLong} ... \end{frame}%
+    \endgroup
+  }
+  ```
+  Verified: same deck, same everything else — 101 errors → **0 errors, page count identical,
+  `Tagged: yes`**. `assets/preamble-template.tex` now does this.
+- **Also:** the stock template avoids `\\` as a line break in that frame (`\par` + `\vspace`
+  instead). `\\` is not what breaks here, but `\par`/`\vspace` is the tagging-safe idiom for
+  stacking centred lines.
+- **Revisit when:** n/a — `\and` outside `\author` was always invalid; tagging just makes the
+  diagnosis maximally confusing.
+
 ## C-VERBATIM — `containsverbatim` / `lstlisting` need `frame*`
 
 - **Symptom:** `! Paragraph ended before \lst@next was complete` / runaway argument with
@@ -159,8 +209,11 @@ why they are absent from the upstream quick-start docs.
   \end{frame*}`). It handles `\verb`/verbatim/`lstlisting` without external files.
 - ⚠ **`frame*` is necessary but NOT sufficient under tagging** — on its own it corrupts the
   tag tree. See **C-FRAMESTAR-TAG** below; you must also suspend tagging around it.
-- ⚠ `scripts/convert_deck.py` rewrites the `\begin{frame}` but **not** the matching
-  `\end{frame}`. Every converted frame needs its `\end{frame}` → `\end{frame*}` by hand.
+- `scripts/convert_deck.py` now rewrites the `\begin` **and** walks the file to pair every
+  `\end{frame}` → `\end{frame*}` automatically. It also converts verbatim frames with an
+  **empty or absent title** (`\begin{frame}[c,containsverbatim]{}` or `…]` with no `{}`) —
+  an earlier version let the empty-title rule strip the `{}` and leave a plain frame, so the
+  listing still broke with `\lst@next`. The containsverbatim check now runs first.
 - **Revisit when:** n/a — `frame*` is the documented mechanism.
 
 ## C-FRAMESTAR-TAG — `frame*` + `listings` corrupts the tag tree  ⚠ highest impact
@@ -426,6 +479,8 @@ why they are absent from the upstream quick-start docs.
 | `Argument of \equal has an extra }` | nested `\Call` (classic algpseudocode) | C-CALL-NEST |
 | `Undefined control sequence \l__tag_name_float/algorithm_tl` | `algorithm` **float** | C-ALGO-FLOAT |
 | `Environment definition undefined` at `\begin{definition}` | no theorem envs | C-THEOREM |
+| Many `Undefined control sequence` (`\institute`, `\hypersetup`) + `\normalsize not defined` + `frame* undefined`; stub 2–8pp PDF | `\DocumentMetadata` never set (commented-out input) | C-NO-DOCMETA |
+| `Paragraph ended before \lst@next was complete` | `lstlisting` in a plain frame (verbatim frame not `frame*`, e.g. empty-title one missed) | C-VERBATIM |
 | `Undefined control sequence \sc` / `\scshape invalid in math mode` | obsolete font commands | C-OLDFONT |
 | `Undefined control sequence \usebackgroundtemplate` | no background templates | C-BACKGROUND |
 | `Unknown color '\ThemeAccent'` (once per frame) | template key won't expand a macro | C-EDITINSTANCE-EXPAND |
@@ -438,6 +493,7 @@ why they are absent from the upstream quick-start docs.
 | `There's no line here to end` | `\\` after display math | C-DISPMATH-NEWLINE |
 | `tagpdf Error: … begin/end … differ` / `Sect can not be closed` | `\tableofcontents` | C-TOC |
 | `tagpdf Error: … begin/end text-unit para hooks differ` (line looks innocent) | `\center{…}` as a command | C-CENTER-ARG |
+| `Misplaced \crcr` in `\tbl_crcr:n` + `Missing }` (~100 errors, none at the title page) | `\and` typeset outside `\author` | C-AND-TITLE |
 | `Not allowed in LR mode` at `\maketitle` | `frame-title-arg` option set | C-MAKETITLE |
 | frame title appears as body text | braced title, no `\frametitle` | C-FRAMETITLE |
 | `not compatible with \DocumentMetadata` | class still `beamer` | switch class |

@@ -133,10 +133,30 @@ The ltx-talk preamble **requires** `\DocumentMetadata` (it uses `\tag_stop:`, `\
 It is a **one-for-one replacement** for the Beamer preamble — load one or the other, never
 both, or you get `Undefined control sequence` at `\usetheme`.
 
+⚠ **Check that each deck actually activates `\DocumentMetadata`.** Real decks ship it
+commented out (`% \input{../tag-commands.tex}`) from a pre-tagging build. Without it ltx-talk
+**half-loads** — a cascade of `Undefined control sequence` (`\institute`, `\hypersetup`,
+`frame*`) plus `\normalsize not defined`, and a 2–8-page stub PDF, none of it naming the
+cause (**C-NO-DOCMETA**). `convert_deck.py` warns when it is missing; uncomment the input. On
+CS3033 this one line fixed three otherwise-broken decks.
+
 Keep the `\DocumentMetadata{…}` block (it must be the very first thing, before
-`\documentclass`). Tagging works with `pdfstandard=a-4` and a `testphase` of `phase-I`
-upward — but the embedded HTML/CSS files tagpdf attaches may force a `PDF/A-4F` validation
-note; that is harmless.
+`\documentclass`). **Prefer the modern `tagging=on` over the legacy `testphase={…}` list:**
+
+```latex
+\DocumentMetadata{ lang=en, pdfversion=2.0, pdfstandard=a-4, tagging=on }
+```
+
+`testphase={phase-I,…}` is the old experimental opt-in and enables only the weakest phase.
+On TeX Live 2026 `tagging=on` is the supported spelling and gives fuller tagging. Verified
+head-to-head on a real course: identical page counts, `Tagged: yes`, 0 errors under both — so
+there is no reason to stay on `testphase`.
+
+⚠ If `tagging=on` appears to explode with ~100 alignment errors, **do not blame the tagging
+mode** — check `\and` in your title page first (**C-AND-TITLE**). That misdiagnosis cost real
+time; the tagging setting was innocent.
+
+The embedded HTML/CSS files tagpdf attaches may force a `PDF/A-4F` validation note; harmless.
 
 ---
 
@@ -172,10 +192,14 @@ with **no title at all**, with no error and no warning (C-FRAMETITLE-NESTED). Ve
 grep -nE '^\s*\\begin\{frame\}(\[[^]]*\])?\{' deck.tex     # must return nothing
 ```
 
-**Two more things the script does not do**, and you must:
-- **`\end{frame}` → `\end{frame*}`.** It rewrites the `\begin` of a verbatim frame but not
-  its matching `\end`. Pair them up (count: `grep -c` each — they must match).
+**One more thing the script does not do**, and you must:
 - **The title page.** Replace the `\maketitle` frame with `\coursetitlepage{…}{…}{…}`.
+  Strip any `%` comments out of the attribution text as you fold it into the third argument —
+  a stray `%` swallows the closing brace and you get `File ended while scanning use of
+  \coursetitlepage`.
+
+(`\end{frame}` → `\end{frame*}` pairing **is** now automatic — `convert_deck.py` walks the
+file after the line rewrites and closes every `frame*` properly.)
 
 After scripting, also swap the preamble `\input` (`common-packages.tex` → `ltx-common.tex`)
 and remove the now-invalid `\AtBeginSection` block and Beamer patch inputs.

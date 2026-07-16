@@ -131,6 +131,27 @@ def strip_atbeginsection(text: str):
     return ''.join(out)
 
 
+def pair_framestar_ends(text: str) -> str:
+    r"""C-VERBATIM: close every \begin{frame*} with \end{frame*}, not \end{frame}.
+
+    convert_deck rewrites the \begin of a verbatim frame but cannot see its matching
+    \end from a line-local rewrite, so we walk the file afterwards. frame* cannot
+    nest, so a simple in/out flag is enough.
+    """
+    out, inside, fixed = [], False, 0
+    for line in text.split('\n'):
+        if not is_comment(line):
+            if '\\begin{frame*}' in line:
+                inside = True
+            elif inside and '\\end{frame}' in line:
+                line = line.replace('\\end{frame}', '\\end{frame*}')
+                inside, fixed = False, fixed + 1
+        out.append(line)
+    if fixed:
+        NOTE.append(f'\\end{{frame}} -> \\end{{frame*}} ({fixed})')
+    return '\n'.join(out)
+
+
 def convert_line(line: str, old_pre: str, new_pre: str) -> str:
     if is_comment(line):
         return line
@@ -151,6 +172,27 @@ def convert_line(line: str, old_pre: str, new_pre: str) -> str:
     if cm:
         body, comment = line[:cm.start()], line[cm.start():]
 
+    # verbatim frame: [...,containsverbatim]{T} -> frame* + frametitle  (C-VERBATIM)
+    # MUST run before the double/empty/normal-title branches below: a verbatim frame with
+    # an empty title (\begin{frame}[c,containsverbatim]{}) would otherwise be caught by the
+    # empty-title rule, which drops the {} but leaves a PLAIN frame — and the listing then
+    # breaks with "Paragraph ended before \lst@next". The title group is OPTIONAL here so
+    # title-less verbatim frames convert too.
+    m = re.match(r'^(\s*)\\begin\{frame\}\[([^\]]*)\](\{([^{}]*)\})?\s*$', body)
+    if m and 'containsverbatim' in m.group(2):
+        opts = ','.join(o for o in (x.strip() for x in m.group(2).split(','))
+                        if o and o != 'containsverbatim')
+        titletext = m.group(4)          # None (no group) or '' (empty {}) -> no \frametitle
+        WARN.append(('C-VERBATIM',
+                     f'Verbatim frame "{titletext or "(untitled)"}" -> frame* (drop '
+                     'containsverbatim). Ensure the matching \\end{frame} becomes '
+                     '\\end{frame*}.'))
+        NOTE.append('containsverbatim frame -> frame*')
+        title = f'{m.group(1)}\\frametitle{{{titletext}}}\n' if titletext else ''
+        head = f'{m.group(1)}\\begin{{frame*}}[{opts}]\n' if opts else \
+               f'{m.group(1)}\\begin{{frame*}}\n'
+        return head + title
+
     # double braced title {A}{B}  -> \frametitle{A --- B}  (warn: Beamer subtitle)
     m = re.match(r'^(\s*)\\begin\{frame\}(\[[^\]]*\])?\{([^{}]*)\}\{([^{}]*)\}\s*$', body)
     if m:
@@ -168,20 +210,6 @@ def convert_line(line: str, old_pre: str, new_pre: str) -> str:
         opt = m.group(2) or ''
         NOTE.append('empty-title frame cleaned')
         return f'{m.group(1)}\\begin{{frame}}{opt}{(" " + comment) if comment else ""}\n'
-
-    # verbatim frame: [...,containsverbatim]{T} -> frame* + frametitle  (C-VERBATIM)
-    m = re.match(r'^(\s*)\\begin\{frame\}\[([^\]]*)\]\{([^{}]*)\}\s*$', body)
-    if m and 'containsverbatim' in m.group(2):
-        opts = ','.join(o for o in (x.strip() for x in m.group(2).split(','))
-                        if o and o != 'containsverbatim')
-        WARN.append(('C-VERBATIM',
-                     f'Verbatim frame "{m.group(3)}" -> frame* (drop containsverbatim). '
-                     'Ensure the matching \\end{frame} becomes \\end{frame*}.'))
-        NOTE.append('containsverbatim frame -> frame*')
-        title = f'{m.group(1)}\\frametitle{{{m.group(3)}}}\n'
-        if opts:
-            return f'{m.group(1)}\\begin{{frame*}}[{opts}]\n{title}'
-        return f'{m.group(1)}\\begin{{frame*}}\n{title}'
 
     # normal braced title  [opts]{T}  or  {T}  ->  \frametitle{T}
     m = re.match(r'^(\s*)\\begin\{frame\}(\[[^\]]*\])?\{([^{}]+)\}\s*$', body)
@@ -224,6 +252,23 @@ LINTS = [
      re.compile(r'\\State\s*<'),
      '\\State<n> is SILENTLY IGNORED by classic algpseudocode: it compiles clean and the '
      'line then shows on every slide. Use \\State \\onslide<n>{...} instead.'),
+    ('C-OVERLAY-ALGO',
+     re.compile(r'\\(?:onslide|only|visible|uncover)\s*<[^>]*>\s*\{\s*\\(?:State|Comment)\b'),
+     'overlay wrapping \\State/\\Comment corrupts algorithmicx\'s csname block stack '
+     '("Missing/Extra \\endcsname" at \\end{frame}). Keep \\State at the top level and '
+     'overlay only its content: \\State \\onslide<n>{...}.'),
+    ('C-OVERLAY-ALIGN',
+     re.compile(r'\\(?:onslide|only|visible|uncover)\s*<[^>]*>\s*\{\s*&'),
+     'overlay wrapping the & of a tabular/align row ("Misplaced alignment tab character &"). '
+     '& must stay at the top level: write  & \\onslide<n>{content}.'),
+    ('C-OVERLAY-ALIGN',
+     re.compile(r'\\(?:onslide|only|visible|uncover)\s*<[^>]*>\s*\{[^{}]*\\\\\s*\}'),
+     'overlay group swallows the row-ending \\\\ ("Misplaced alignment tab" / "Improper '
+     '\\halign"). \\\\ must stay at the top level: \\onslide<n>{content} \\\\.'),
+    ('C-DISPMATH-NEWLINE',
+     re.compile(r'(?:\$\$|\\\])\s*\\\\'),
+     '\\\\ immediately after display math ("There\'s no line here to end"): display math ends '
+     'in vertical mode. Use \\vspace{...} or a blank line instead.'),
     ('C-TOC',
      re.compile(r'\\tableofcontents'),
      '\\tableofcontents corrupts the tag tree under ltx-talk. Remove it; the redefined '
@@ -247,9 +292,36 @@ LINTS = [
 ]
 
 
+def missing_documentmetadata(text: str) -> bool:
+    r"""True if the deck never activates \DocumentMetadata before \documentclass.
+
+    ltx-talk REQUIRES \DocumentMetadata: without it the class half-loads and you get a
+    cascade of "Undefined control sequence" (\institute, \hypersetup, frame*) plus
+    "\normalsize is not defined" — none of which name the real cause. A deck satisfies
+    the requirement either with a literal \DocumentMetadata or with a NON-commented
+    \input of a file that sets it (conventionally tag-commands.tex). A commented-out
+    \input (`% \input{../tag-commands.tex}`) is the trap this catches.
+    """
+    for line in text.split('\n'):
+        code = line.split('%', 1)[0] if not line.lstrip().startswith('%') else ''
+        if '\\documentclass' in code:
+            return True                                  # reached class first -> missing
+        if '\\DocumentMetadata' in code:
+            return False
+        if '\\input' in code and 'tag-commands' in code:
+            return False
+    return True
+
+
 def lint(text: str, path: str) -> int:
     """Report source-level failures the compiler stays silent about. Returns issue count."""
     hits = []
+    if missing_documentmetadata(text):
+        hits.append((1, 'C-NO-DOCMETA',
+                     'no \\DocumentMetadata reached before \\documentclass (is '
+                     '\\input{...tag-commands...} commented out?). ltx-talk half-loads '
+                     'without it: \\institute/\\hypersetup/frame*/\\normalsize all come '
+                     'up "undefined", none naming the cause.', '\\documentclass{ltx-talk}'))
     for lineno, line in enumerate(text.split('\n'), 1):
         if is_comment(line):
             continue
@@ -299,8 +371,14 @@ def main():
     result = ''.join(out_lines)
     if result.endswith('\n\n'):
         result = result[:-1]
+    result = pair_framestar_ends(result)      # C-VERBATIM: close frame* properly
 
     # blanket warnings worth raising regardless of what was rewritten
+    if missing_documentmetadata(text):
+        WARN.append(('C-NO-DOCMETA', 'This deck does not activate \\DocumentMetadata before '
+                     '\\documentclass (a commented-out \\input{...tag-commands...}?). ltx-talk '
+                     'half-loads without it — expect "undefined" \\institute/\\hypersetup/'
+                     'frame*/\\normalsize. Uncomment the metadata input.'))
     if re.search(r'\\begin\{algorithmic\}', text):
         WARN.append(('C-ALGO', 'Deck contains algorithms: the preamble MUST use classic '
                      'algorithmicx + algpseudocode[noend], NOT algpseudocodex, or every '
