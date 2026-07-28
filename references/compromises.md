@@ -327,10 +327,12 @@ why they are absent from the upstream quick-start docs.
 - **Workaround:** keep `&` and `\\` at the top level; wrap only the **content**:
   ```latex
   % tabular — use <.-> on cols 2+ to share the same overlay step
-  \onslide<+->{cell1} & \onslide<.->{cell2} & \onslide<.->{cell3} \\
+  \uncover<+->{cell1} & \uncover<.->{cell2} & \uncover<.->{cell3} \\
   % align* — wrap the formula, not the alignment token
-  & \onslide<4->{= \frac{1}{n}(R_n + (n-1)Q_n)} \\
+  & \uncover<4->{= \frac{1}{n}(R_n + (n-1)Q_n)} \\
   ```
+  ⚠ Use `\uncover`, **not** `\onslide` — see C-ONSLIDE-ARG. `\onslide` takes no argument, so
+  `\onslide<+->{cell1}` leaks past the cell and blanks the rest of the table.
   `<.->` on subsequent cells reuses the current step counter without incrementing, so all
   cells in a row appear and disappear together. `<+->` on the first cell increments the step.
 - **Revisit when:** n/a — this is a fundamental TeX alignment mechanism constraint.
@@ -350,20 +352,54 @@ why they are absent from the upstream quick-start docs.
   *content* — the same principle as C-OVERLAY-ALIGN:
   ```latex
   % Instead of: \onslide<2>{\State $x \gets y$ \Comment{note}}
-  \State \onslide<2>{$x \gets y$ \Comment{note}}   % 0 errors, overlay preserved
+  \State \uncover<2>{$x \gets y$ \Comment{note}}   % 0 errors, overlay preserved
   ```
   `\State` is then always executed (so push/pop stay balanced) and only the text appears or
-  disappears. Wrapping a **balanced** `\If{…}\EndIf` pair in `\onslide{…}` is also safe,
-  because both push and pop are hidden together.
+  disappears. Wrapping a **balanced** `\If{…}\EndIf` pair is also safe, because both push and
+  pop are hidden together — but it must be `\uncover<2>{\If…\EndIf}`, **never**
+  `\onslide<2>{…}` (C-ONSLIDE-ARG).
 - ⚠ **Do NOT use `\State<2> …`.** An earlier version of this entry recommended the
-  "native overlay-spec syntax". **It does not work** under ltx-talk 0.5.1 + classic
-  `algpseudocode` (the engine C-ALGO forces you onto): the `<2>` is *silently swallowed* —
-  it compiles with zero errors and zero warnings, and the line then renders on **every**
-  slide, destroying the progressive reveal. Verified: `\State<2>` → 1 page (no overlay);
-  `\onslide<2>{\State}` → 2 pages but 30 `\endcsname` errors; `\State \onslide<2>{…}` →
-  2 pages, 0 errors. Classic `algpseudocode` is simply not overlay-aware; only beamer
-  patched it to be.
+  "native overlay-spec syntax". **It does not work** under classic `algpseudocode` (the engine
+  C-ALGO forces you onto): the `<2>` is typeset as **literal `<2>` text on the slide** and the
+  overlay never fires, so the line renders on every slide *and* carries visible junk. Verified
+  2026-07-22 by rendering the page — note that `pdftotext` shows the `<2>` too, but only the
+  image proves it is *visible*. Classic `algpseudocode` is simply not overlay-aware; only
+  beamer patched it to be.
+- ⚠ **`\onslide` is not the fix either** — earlier revisions of this entry said
+  `\State \onslide<2>{…}`. That leaks (C-ONSLIDE-ARG) and in a real deck blanked the entire
+  remainder of a two-function algorithm. Always `\State \uncover<2>{…}`.
 - **Revisit when:** ltx-talk (or algorithmicx) grows real overlay-spec support on `\State`.
+
+## C-ONSLIDE-ARG — `\onslide<n>{…}` takes no argument and leaks to end of frame
+
+- **Symptom:** none at compile time. Zero errors, zero warnings, correct page count. On the
+  *early* overlays of a frame, everything after the `\onslide` is simply blank — the rest of a
+  table row, all following rows, subsequent body text, even the other column of a `columns`
+  environment. Found only by rendering an early overlay and looking at it.
+- **Cause:** ltx-talk declares
+  ```latex
+  \NewDocumentCommand \onslide { D <> { all } }     % ltx-talk.cls:1486 — spec only, no +m
+  ```
+  so `\onslide<2>{X}` is the *declaration* `\onslide<2>` followed by an ordinary brace group.
+  The declaration then applies to the rest of the frame. It is stored in a **global** token
+  list (`\g__talk_onslide_tl`, ltx-talk.cls:1502), so ordinary grouping — including `tabular`
+  cells, which are their own TeX group — does **not** contain it. This is a genuine Beamer
+  incompatibility: Beamer's `\onslide` *does* accept a braced argument, so the pattern
+  survives conversion untouched and looks right.
+- **Workaround:** use the commands that really do take an argument:
+  ```latex
+  \uncover<2>{X}    % hides but RESERVES space  — the Beamer \onslide{...} equivalent
+  \only<2>{X}       % omits entirely, no space reserved
+  ```
+  `\uncover` is the right default when converting Beamer's `\onslide<n>{…}`; it keeps the
+  layout stable across overlays. Bare `\onslide<2->` with no group remains valid ltx-talk and
+  should be left alone.
+- **Scale:** in one 11-deck course this pattern appeared **139 times** and was invisible in
+  every "builds clean" report. The mechanical fix is
+  `\onslide<spec>{` → `\uncover<spec>{` (skip commented-out lines); page counts should be
+  **unchanged** afterwards, which is a good invariant to assert.
+- **Revisit when:** ltx-talk gives `\onslide` a `+m` argument form for Beamer compatibility.
+  Track against `\NewDocumentCommand \onslide` in `ltx-talk.cls`.
 
 ## C-DISPMATH-NEWLINE — `\\` after display math is invalid
 
@@ -468,9 +504,14 @@ why they are absent from the upstream quick-start docs.
 > | Silent failure | Symptom | Entry |
 > |---|---|---|
 > | Nested-brace frame title left unconverted | frame has **no title**; text lands in the body | C-FRAMETITLE-NESTED |
-> | `\State<2>` used as an overlay spec | overlay **silently dropped**; line shows on every slide | C-OVERLAY-ALGO |
+> | `\onslide<n>{…}` (braced) | blanks **everything after it to end of frame** on early overlays | C-ONSLIDE-ARG |
+> | `\State<2>` used as an overlay spec | overlay never fires; literal **`<2>` printed on the slide** | C-OVERLAY-ALGO |
 > | `\center{…}` used as a command | tag tree corrupts; error lands **far away**, or in another frame | C-CENTER-ARG |
 > | `\includegraphics` without `alt=` | screen reader reads out **the filename** | see `alt-text.md` |
+>
+> Three of these are invisible to `pdftotext` as well as to the compiler: hidden overlay
+> content stays in the PDF text layer. **Render the page** (`pdftoppm -f N -l N -png`) to
+> judge an overlay.
 
 | Error text | Cause | Entry |
 |---|---|---|

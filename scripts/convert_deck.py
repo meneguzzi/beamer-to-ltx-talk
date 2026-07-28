@@ -248,23 +248,31 @@ LINTS = [
      re.compile(r'\\(?:centering|raggedright|raggedleft)\s*\{'),
      'declaration used as if it took an argument — same tag-tree hazard as \\center{...}. '
      'Use the matching environment, or drop the braces so it acts as a declaration.'),
+    ('C-ONSLIDE-ARG',
+     re.compile(r'\\onslide\s*<[^>]*>\s*\{'),
+     '\\onslide takes NO braced argument in ltx-talk (\\NewDocumentCommand \\onslide '
+     '{ D <> { all } }), so \\onslide<n>{...} is a DECLARATION plus a stray group: it blanks '
+     'everything after it to the end of the frame. The state is a GLOBAL token list, so '
+     'tabular cells and other groups do not contain the leak. Compiles clean; visible only '
+     'by rendering an early overlay. Use \\uncover<n>{...} (reserves space) or \\only<n>{...} '
+     '(does not). Bare \\onslide<n> as a declaration is fine.'),
     ('C-OVERLAY-ALGO',
      re.compile(r'\\State\s*<'),
-     '\\State<n> is SILENTLY IGNORED by classic algpseudocode: it compiles clean and the '
-     'line then shows on every slide. Use \\State \\onslide<n>{...} instead.'),
+     '\\State<n> is NOT supported by classic algpseudocode: the spec is typeset as LITERAL '
+     '"<n>" text on the slide and the overlay never fires. Use \\State \\uncover<n>{...}.'),
     ('C-OVERLAY-ALGO',
      re.compile(r'\\(?:onslide|only|visible|uncover)\s*<[^>]*>\s*\{\s*\\(?:State|Comment)\b'),
      'overlay wrapping \\State/\\Comment corrupts algorithmicx\'s csname block stack '
      '("Missing/Extra \\endcsname" at \\end{frame}). Keep \\State at the top level and '
-     'overlay only its content: \\State \\onslide<n>{...}.'),
+     'overlay only its content: \\State \\uncover<n>{...}.'),
     ('C-OVERLAY-ALIGN',
      re.compile(r'\\(?:onslide|only|visible|uncover)\s*<[^>]*>\s*\{\s*&'),
      'overlay wrapping the & of a tabular/align row ("Misplaced alignment tab character &"). '
-     '& must stay at the top level: write  & \\onslide<n>{content}.'),
+     '& must stay at the top level: write  & \\uncover<n>{content}.'),
     ('C-OVERLAY-ALIGN',
      re.compile(r'\\(?:onslide|only|visible|uncover)\s*<[^>]*>\s*\{[^{}]*\\\\\s*\}'),
      'overlay group swallows the row-ending \\\\ ("Misplaced alignment tab" / "Improper '
-     '\\halign"). \\\\ must stay at the top level: \\onslide<n>{content} \\\\.'),
+     '\\halign"). \\\\ must stay at the top level: \\uncover<n>{content} \\\\.'),
     ('C-DISPMATH-NEWLINE',
      re.compile(r'(?:\$\$|\\\])\s*\\\\'),
      '\\\\ immediately after display math ("There\'s no line here to end"): display math ends '

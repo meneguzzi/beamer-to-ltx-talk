@@ -39,21 +39,31 @@ the upstream docs because they only surface under *tagging* (`\DocumentMetadata`
 >   (overlays, columns, templates). Use it for *how ltx-talk works*; use this skill for
 >   *how to convert*.
 
-> ### ⚠ Four failures in this skill produce NO usable error message
+> ### ⚠ Five failures in this skill produce NO usable error message
 > They will not show up in a log (or point anywhere near the fault), and "it compiled" means
-> nothing. **`convert_deck.py --lint` greps for all four — run it before every build.**
+> nothing. **`convert_deck.py --lint` greps for all five — run it before every build.**
 > 1. **Nested-brace frame titles** left unconverted → the frame has *no title*; the text
 >    renders as body text (C-FRAMETITLE-NESTED). Run `fix_frame_titles.py`, then grep.
-> 2. **`\State<2>`** used as an algorithm overlay spec → the overlay is *silently dropped*
->    and the line shows on every slide (C-OVERLAY-ALGO). Use `\State \onslide<2>{…}`.
-> 3. **`\center{…}`** used as if it took an argument → it is a *declaration*; under tagging it
+> 2. **`\onslide<2>{…}`** → ltx-talk's `\onslide` takes **no argument**, so this parses as a
+>    *declaration* plus a stray group and blanks **everything after it to the end of the
+>    frame** (C-ONSLIDE-ARG). The state lives in a *global* token list, so `tabular` cells and
+>    other groups do **not** contain the leak. Use `\uncover<2>{…}` (reserves space) or
+>    `\only<2>{…}` (does not). Bare `\onslide<2->` as a declaration is still valid.
+> 3. **`\State<2>`** used as an algorithm overlay spec → classic `algpseudocode` does not
+>    accept it; the spec is typeset as **literal `<2>` text on the slide** and the overlay
+>    never fires (C-OVERLAY-ALGO). Use `\State \uncover<2>{…}`.
+> 4. **`\center{…}`** used as if it took an argument → it is a *declaration*; under tagging it
 >    leaks an unclosed paragraph and the error is reported **nowhere near** the offending line
 >    (C-CENTER-ARG). Cost a full day of bisection. Use `\begin{center}…\end{center}`.
-> 4. **Images without `alt=`** → a screen reader reads out *the filename*.
+> 5. **Images without `alt=`** → a screen reader reads out *the filename*.
 >
 > Also: **measure against a build that actually ran.** Beamer + `\DocumentMetadata` is fatal,
 > so a half-migrated repo can leave stale PDFs lying around, and `pdfinfo` will happily read
 > them and give you a confident, wrong baseline.
+>
+> And **verify overlays by rendering pages, never with `pdftotext`** — hidden overlay content
+> stays in the PDF text layer, so extraction reports text that is invisible on the slide.
+> Use `pdftoppm -f N -l N -r 120 -png deck.pdf out` and look at the image.
 
 ---
 
