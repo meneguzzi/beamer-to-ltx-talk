@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Felipe Meneguzzi
+# Part of beamer-to-ltx-talk: https://github.com/meneguzzi/beamer-to-ltx-talk
+
 """Audit every tabular in a course (A-TABLE-TH): where it is, what it looks
 like, and a FIRST-PASS GUESS at whether it is a data table (needs TH) or a
 layout grid (needs table/tagging=div).

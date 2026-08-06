@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Felipe Meneguzzi
+# Part of beamer-to-ltx-talk: https://github.com/meneguzzi/beamer-to-ltx-talk
+
 """
 alt_text_apply.py — inject reviewed alt text back into the decks.
 

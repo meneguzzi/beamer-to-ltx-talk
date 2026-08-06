@@ -176,3 +176,9 @@ The whole point of this conversion is tagged, accessible PDF. Things to check af
 - **Reading order in columns**: content is tagged in source order (left column first, then right). Write columns so left-first is the correct reading order. For paired-row content, use `tabular` instead.
 - **Block titles**: the `title=` argument of `block`/`alertblock`/`exampleblock` is tagged as plain text, not as a heading. For semantically important labels, use `\subsubsection*{}` inside the box body.
 - **Verify tagging**: `pdfinfo deck.pdf | grep Tagged` should return `yes`; `grep 'tagpdf Error' deck.log` should return 0 matches.
+
+---
+
+## License
+
+Licensed under the [GNU Affero General Public License v3.0](LICENSE) (or later), with an additional attribution term under §7(b): any redistributed or modified version — including one run as a network service — must keep a visible credit back to this project. See [`LICENSE`](LICENSE) for the exact wording.
