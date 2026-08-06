@@ -1,0 +1,47 @@
+name: CI
+
+# Sanity checks that don't need a LaTeX/ltx-talk toolchain: the scripts must
+# at least parse cleanly. Full deck-conversion testing needs TeX Live +
+# ltx-talk and a real Beamer fixture, so it stays a manual pre-release step
+# (see SKILL.md), not something CI can reasonably run on every push.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Parse-check all scripts
+        run: |
+          set -e
+          for f in scripts/*.py; do
+            echo "checking $f"
+            python3 -W error::SyntaxWarning -c "import ast; ast.parse(open('$f').read())"
+          done
+
+      - name: convert_deck.py --help works
+        run: python3 scripts/convert_deck.py --help
+
+      - name: Lint a synthetic fixture (exercises --lint end to end)
+        run: |
+          cat > /tmp/fixture.tex <<'EOF'
+          \documentclass{beamer}
+          \begin{document}
+          \begin{frame}{A title}
+          \onslide<2>{Some text} & more \\
+          \end{frame}
+          \end{document}
+          EOF
+          # Expected to exit 1 (findings present) -- that's success for this check.
+          if python3 scripts/convert_deck.py /tmp/fixture.tex --lint; then
+            echo "expected --lint to flag the synthetic fixture, but it passed clean" >&2
+            exit 1
+          fi

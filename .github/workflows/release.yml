@@ -1,0 +1,50 @@
+name: Attach skill zip to release
+
+# Builds beamer-to-ltx-talk-<tag>.zip in the claude.ai "Upload a skill" shape
+# (a single top-level <skill-name>/ folder containing SKILL.md) and attaches
+# it to the GitHub release for the tag. Does NOT create the release itself
+# or write release notes -- cut the release by hand (`gh release create` or
+# the GitHub UI) so notes stay reviewed, then this fills in the asset.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-attach:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Verify SKILL.md name matches folder
+        run: |
+          skill_name=$(basename "$GITHUB_WORKSPACE")
+          front_name=$(sed -n 's/^name:[[:space:]]*//p' SKILL.md | head -1 | tr -d '\r')
+          echo "folder=$skill_name frontmatter=$front_name"
+          if [ "$skill_name" != "beamer-to-ltx-talk" ]; then
+            echo "Checkout folder name unexpectedly not beamer-to-ltx-talk" >&2
+            exit 1
+          fi
+          if [ "$front_name" != "beamer-to-ltx-talk" ]; then
+            echo "SKILL.md 'name:' frontmatter ($front_name) does not match the skill name" >&2
+            exit 1
+          fi
+
+      - name: Build skill zip
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          stage="$RUNNER_TEMP/beamer-to-ltx-talk"
+          mkdir -p "$stage"
+          git archive HEAD | tar -x -C "$stage"
+          zip_name="beamer-to-ltx-talk-${tag}.zip"
+          (cd "$RUNNER_TEMP" && zip -r -X "$GITHUB_WORKSPACE/$zip_name" beamer-to-ltx-talk)
+          echo "ZIP_NAME=$zip_name" >> "$GITHUB_ENV"
+
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" "${ZIP_NAME}" --clobber
