@@ -178,53 +178,64 @@ def convert_line(line: str, old_pre: str, new_pre: str) -> str:
     # empty-title rule, which drops the {} but leaves a PLAIN frame — and the listing then
     # breaks with "Paragraph ended before \lst@next". The title group is OPTIONAL here so
     # title-less verbatim frames convert too.
-    m = re.match(r'^(\s*)\\begin\{frame\}\[([^\]]*)\](\{([^{}]*)\})?\s*$', body)
-    if m and 'containsverbatim' in m.group(2):
-        opts = ','.join(o for o in (x.strip() for x in m.group(2).split(','))
+    # NOTE: all five regexes below accept an optional leading <overlayspec> (e.g.
+    # \begin{frame}<3>[c]{Title}) before the [opts] group. Beamer allows the overlay
+    # spec ahead of the options bracket, and a deck that has one there was, until this
+    # was found on a real course, silently invisible to both this script AND the
+    # Step-4 verification grep in SKILL.md — a title-less/unconverted frame reported
+    # as "clean". See C-FRAMETITLE in compromises.md.
+    m = re.match(r'^(\s*)\\begin\{frame\}(<[^>]*>)?\[([^\]]*)\](\{([^{}]*)\})?\s*$', body)
+    if m and 'containsverbatim' in m.group(3):
+        overlay = m.group(2) or ''
+        opts = ','.join(o for o in (x.strip() for x in m.group(3).split(','))
                         if o and o != 'containsverbatim')
-        titletext = m.group(4)          # None (no group) or '' (empty {}) -> no \frametitle
+        titletext = m.group(5)          # None (no group) or '' (empty {}) -> no \frametitle
         WARN.append(('C-VERBATIM',
                      f'Verbatim frame "{titletext or "(untitled)"}" -> frame* (drop '
                      'containsverbatim). Ensure the matching \\end{frame} becomes '
                      '\\end{frame*}.'))
         NOTE.append('containsverbatim frame -> frame*')
         title = f'{m.group(1)}\\frametitle{{{titletext}}}\n' if titletext else ''
-        head = f'{m.group(1)}\\begin{{frame*}}[{opts}]\n' if opts else \
-               f'{m.group(1)}\\begin{{frame*}}\n'
+        head = f'{m.group(1)}\\begin{{frame*}}{overlay}[{opts}]\n' if opts else \
+               f'{m.group(1)}\\begin{{frame*}}{overlay}\n'
         return head + title
 
     # double braced title {A}{B}  -> \frametitle{A --- B}  (warn: Beamer subtitle)
-    m = re.match(r'^(\s*)\\begin\{frame\}(\[[^\]]*\])?\{([^{}]*)\}\{([^{}]*)\}\s*$', body)
+    m = re.match(r'^(\s*)\\begin\{frame\}(<[^>]*>)?(\[[^\]]*\])?\{([^{}]*)\}\{([^{}]*)\}\s*$', body)
     if m:
-        opt = m.group(2) or ''
+        overlay = m.group(2) or ''
+        opt = m.group(3) or ''
         WARN.append(('C-FRAMETITLE',
-                     f'Double title folded: {{{m.group(3)}}}{{{m.group(4)}}} -> '
-                     f'"{m.group(3)} --- {m.group(4)}" (ltx-talk has no frame subtitle in '
+                     f'Double title folded: {{{m.group(4)}}}{{{m.group(5)}}} -> '
+                     f'"{m.group(4)} --- {m.group(5)}" (ltx-talk has no frame subtitle in '
                      'output). Review wording.'))
         NOTE.append('double-title frame -> frametitle')
-        return f'{m.group(1)}\\begin{{frame}}{opt} {comment}\n{m.group(1)}\\frametitle{{{m.group(3)} --- {m.group(4)}}}\n'
+        return f'{m.group(1)}\\begin{{frame}}{overlay}{opt} {comment}\n{m.group(1)}\\frametitle{{{m.group(4)} --- {m.group(5)}}}\n'
 
     # empty title {} -> drop the group (keep trailing comment, e.g. activity slides)
-    m = re.match(r'^(\s*)\\begin\{frame\}(\[[^\]]*\])?\{\}\s*$', body)
+    m = re.match(r'^(\s*)\\begin\{frame\}(<[^>]*>)?(\[[^\]]*\])?\{\}\s*$', body)
     if m:
-        opt = m.group(2) or ''
+        overlay = m.group(2) or ''
+        opt = m.group(3) or ''
         NOTE.append('empty-title frame cleaned')
-        return f'{m.group(1)}\\begin{{frame}}{opt}{(" " + comment) if comment else ""}\n'
+        return f'{m.group(1)}\\begin{{frame}}{overlay}{opt}{(" " + comment) if comment else ""}\n'
 
     # normal braced title  [opts]{T}  or  {T}  ->  \frametitle{T}
-    m = re.match(r'^(\s*)\\begin\{frame\}(\[[^\]]*\])?\{([^{}]+)\}\s*$', body)
+    m = re.match(r'^(\s*)\\begin\{frame\}(<[^>]*>)?(\[[^\]]*\])?\{([^{}]+)\}\s*$', body)
     if m:
-        opt = m.group(2) or ''
+        overlay = m.group(2) or ''
+        opt = m.group(3) or ''
         NOTE.append('frame title -> frametitle')
         tail = (' ' + comment) if comment else ''
-        return f'{m.group(1)}\\begin{{frame}}{opt}{tail}\n{m.group(1)}\\frametitle{{{m.group(3)}}}\n'
+        return f'{m.group(1)}\\begin{{frame}}{overlay}{opt}{tail}\n{m.group(1)}\\frametitle{{{m.group(4)}}}\n'
 
     # frame title with a trailing comment after the brace
-    m = re.match(r'^(\s*)\\begin\{frame\}(\[[^\]]*\])?\{([^{}]+)\}\s*$', body) if comment else None
+    m = re.match(r'^(\s*)\\begin\{frame\}(<[^>]*>)?(\[[^\]]*\])?\{([^{}]+)\}\s*$', body) if comment else None
     if m:
-        opt = m.group(2) or ''
+        overlay = m.group(2) or ''
+        opt = m.group(3) or ''
         NOTE.append('frame title (w/ comment) -> frametitle')
-        return f'{m.group(1)}\\begin{{frame}}{opt} {comment}\n{m.group(1)}\\frametitle{{{m.group(3)}}}\n'
+        return f'{m.group(1)}\\begin{{frame}}{overlay}{opt} {comment}\n{m.group(1)}\\frametitle{{{m.group(4)}}}\n'
 
     # \section is deliberately NOT rewritten: the shared preamble redefines \section
     # itself to emit the divider frame (C-TOC), so the decks keep their original lines.
@@ -235,7 +246,7 @@ def convert_line(line: str, old_pre: str, new_pre: str) -> str:
 #: Each entry is a failure the LaTeX compiler will NOT report.
 LINTS = [
     ('C-FRAMETITLE',
-     re.compile(r'^\s*\\begin\{frame\}(?:\[[^\]]*\])?\{'),
+     re.compile(r'^\s*\\begin\{frame\}(?:<[^>]*>)?(?:\[[^\]]*\])?\{'),
      'braced frame title left unconverted — this renders as BODY TEXT with no error and '
      'no title in the header. Convert to \\frametitle{...} (nested braces: run '
      'scripts/fix_frame_titles.py).'),
@@ -266,11 +277,13 @@ LINTS = [
      '("Missing/Extra \\endcsname" at \\end{frame}). Keep \\State at the top level and '
      'overlay only its content: \\State \\uncover<n>{...}.'),
     ('C-OVERLAY-ALIGN',
-     re.compile(r'\\(?:onslide|only|visible|uncover)\s*<[^>]*>\s*\{\s*&'),
+     re.compile(r'\\onslide\s*<[^>]*>\s*\{\s*&'),
      'overlay wrapping the & of a tabular/align row ("Misplaced alignment tab character &"). '
-     '& must stay at the top level: write  & \\uncover<n>{content}.'),
+     '& must stay at the top level: write  & \\uncover<n>{content}. (Only \\onslide leaks '
+     'this way — \\only/\\uncover either omit or opacity-toggle their whole group and are '
+     'safe around & and \\\\; verified on a real course, see C-OVERLAY-ALIGN in compromises.md.)'),
     ('C-OVERLAY-ALIGN',
-     re.compile(r'\\(?:onslide|only|visible|uncover)\s*<[^>]*>\s*\{[^{}]*\\\\\s*\}'),
+     re.compile(r'\\onslide\s*<[^>]*>\s*\{[^{}]*\\\\\s*\}'),
      'overlay group swallows the row-ending \\\\ ("Misplaced alignment tab" / "Improper '
      '\\halign"). \\\\ must stay at the top level: \\uncover<n>{content} \\\\.'),
     ('C-DISPMATH-NEWLINE',

@@ -21,8 +21,9 @@ The guiding principle is **faithful, minimal, scripted change**: keep the body c
 slide order identical, rewrite only what the class change forces, and **tell the user
 every time a compromise is made**.
 
-This skill encodes problems discovered converting a real 11-deck course. Most are not in
-the upstream docs because they only surface under *tagging* (`\DocumentMetadata`).
+This skill encodes problems discovered converting two real courses (11 decks, then 20).
+Most are not in the upstream docs because they only surface under *tagging*
+(`\DocumentMetadata`).
 
 > **Companion references (read before doing anything):**
 > - `references/compromises.md` — the catalogue of incompatibilities, with symptom, cause,
@@ -208,8 +209,14 @@ patterns, never content. It performs:
 
 The script **never edits commented-out lines** and preserves indentation. It prints a
 summary of every change and every warning. Things it deliberately leaves for you to do by
-hand (because they need judgement): the title-page content, folding double titles, and
-anything inside a frame body.
+hand (because they need judgement): the title-page content, folding double titles, anything
+inside a frame body, **and every C-ONSLIDE-ARG / C-OVERLAY-ALGO / C-OVERLAY-ALIGN fix**
+(`\onslide<n>{…}` → `\uncover<n>{…}`/`\only<n>{…}`). `--lint` finds all of them; the script
+does not rewrite them. An earlier version of this skill auto-rewrote `\onslide<spec>{` →
+`\uncover<spec>{` mechanically and it corrupted a group that wrapped a whole `tabular`
+environment (the fix needs to know whether the group's `&`/`\\` belong to an *outer*
+alignment or are the overlay's own content) — reverted in favour of a lint-then-hand-fix
+workflow. At course scale (100-200+ hits) this is real, tedious work; budget time for it.
 
 **Then run the second pass — it is not optional:**
 ```sh
@@ -219,7 +226,7 @@ python3 scripts/fix_frame_titles.py deck.tex
 nested braces (`{\only<1>{A}\only<2>{B}}`, `{Title}{{\sc Sub}}`). Those frames then render
 with **no title at all**, with no error and no warning (C-FRAMETITLE-NESTED). Verify:
 ```sh
-grep -nE '^\s*\\begin\{frame\}(\[[^]]*\])?\{' deck.tex     # must return nothing
+grep -nE '^\s*\\begin\{frame\}(<[^>]*>)?(\[[^]]*\])?\{' deck.tex     # must return nothing
 ```
 
 **One more thing the script does not do**, and you must:
@@ -285,7 +292,7 @@ one people miss:
 ```sh
 pdfinfo deck.pdf | grep -E 'Pages|Tagged'                  # Tagged: yes, pages == baseline
 grep -c 'tagpdf Error' deck.log                            # must be 0 (Warnings are OK)
-grep -nE '^\s*\\begin\{frame\}(\[[^]]*\])?\{' deck.tex     # must be EMPTY: title-less frames
+grep -nE '^\s*\\begin\{frame\}(<[^>]*>)?(\[[^]]*\])?\{' deck.tex     # must be EMPTY: title-less frames
 grep -c 'Alternative text for graphic is missing' deck.log # -> 0 after Step 6
 pdftoppm -png -r 70 -f 1 -l 4 deck.pdf /tmp/new            # eyeball title/heading/columns
 ```

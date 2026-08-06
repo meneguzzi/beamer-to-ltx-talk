@@ -14,7 +14,7 @@ Beamer is [incompatible with `\DocumentMetadata`](https://github.com/josephwrigh
 - Native handout mode without per-deck edits
 - Clean `\EditInstance`-based theming instead of `\setbeamer*` commands
 
-The trade-off is that ltx-talk is still experimental and has known incompatibilities — most of which only surface under tagging. This skill encodes the fixes discovered converting a real 11-deck course.
+The trade-off is that ltx-talk is still experimental and has known incompatibilities — most of which only surface under tagging. This skill encodes the fixes discovered converting two real courses: an 11-deck course and a 20-deck course.
 
 ---
 
@@ -113,14 +113,18 @@ Common beamer theme → accent colour mapping is in the template comments.
 
 Full details — including error signatures and workarounds — are in [`references/compromises.md`](references/compromises.md).
 
-**The worst failures produce no error at the offending line.** `--lint` catches all four:
+**The worst failures produce no error at the offending line.** `--lint` catches the greppable ones (all but the first):
 
 | ID | Silent failure | Fix |
 |---|---|---|
+| **C-ONSLIDE-ARG** | `\onslide<n>{…}` takes **no argument** in ltx-talk → the declaration leaks and blanks **everything after it to the end of the frame** on early overlays; 139 occurrences in one 11-deck course, invisible in every "builds clean" report | `\uncover<n>{…}` (reserves space) or `\only<n>{…}` (doesn't) |
 | **C-FRAMETITLE-NESTED** | Nested-brace title left unconverted → frame has **no title**, text lands in the body | Run `fix_frame_titles.py` |
 | **C-CENTER-ARG** | `\center{…}` used as a command → tag tree corrupts, error lands **far away** | `\begin{center}…\end{center}` |
-| **C-OVERLAY-ALGO** | `\State<2>` → overlay **silently dropped**; line shows on every slide | `\State \onslide<2>{…}` |
+| **C-OVERLAY-ALGO** | `\State<2>` used as an overlay spec → **literal `<2>` printed on the slide**, overlay never fires | `\State \uncover<2>{…}` (not `\onslide` — see C-ONSLIDE-ARG) |
+| **C-NO-DOCMETA** | `\DocumentMetadata` shipped commented out → ltx-talk **half-loads**, cascading `Undefined control sequence` naming none of the real cause | Uncomment/add `\DocumentMetadata{…}` before `\documentclass` |
 | *(alt text)* | `\includegraphics` without `alt=` → screen reader reads out **the filename** | `alt_text_audit.py` |
+
+⚠ Verify overlays by **rendering pages** (`pdftoppm -f N -l N -png`), never with `pdftotext` — hidden overlay content stays in the PDF text layer, so text extraction reports content that isn't visible on the slide. This is how C-ONSLIDE-ARG and C-OVERLAY-ALGO were actually caught.
 
 Failures that survive **all** of the above — clean compile, `Tagged: yes`, 0 tagpdf errors,
 every image described — and are found only by running a real PDF/UA checker (**Step 6b**):
@@ -152,13 +156,15 @@ Errors the compiler *does* report:
 | **C-TITLEPAGE** | `\maketitle` fills frame; trailing text overlaps | Use `\coursetitlepage{}{}{}` |
 | **C-NOBEAMER** | All `\usetheme`/`\setbeamer*` are undefined | Rebuild styling with `\EditInstance` |
 | **C-BACKGROUND** | No `\usebackgroundtemplate` | Overlay tikz node (never a no-op stub) |
+| **C-AND-TITLE** ⚠️ | `\and` typeset outside `\author` (e.g. in a custom title page) → **101 errors**, none near the fault (`Misplaced \crcr`) | `\renewcommand{\and}{\qquad}` for the duration of the title frame; already in `preamble-template.tex` |
+| **C-IMMATURE** | `block`/theorem envs are undocumented/incomplete (issues #205, #219); `media9` untested under tagging | Use sparingly; build theorems with `tcolorbox` (C-THEOREM) |
 | **C-OLDFONT** | `\sc`/`\it`/`\bf` undefined, and may sit inside maths | `\ifmmode`-guarded `\providecommand` stubs |
 | **C-EDITINSTANCE-EXPAND** | Template colour keys won't expand `\ThemeAccent` | Write the colour name out literally |
 | **C-OVERLAY-ALIGN** | Overlay tokens around `&`/`\\` break alignment | Wrap only the cell content |
 | **C-DISPMATH-NEWLINE** | `\\` after display math errors | Replace with `\vspace{…}` or a blank line |
 | **C-FONTS** | Maths is sans-serif by default | Re-point the four maths symbol fonts to Latin Modern |
 
-The catalogue is version-pinned to **ltx-talk 0.5.1**. Before converting, check the [ltx-talk changelog](https://github.com/josephwright/ltx-talk/blob/main/CHANGELOG.md) and [open issues](https://github.com/josephwright/ltx-talk/issues) — some workarounds may no longer be needed.
+The catalogue is verified across **ltx-talk 0.5.0–0.5.2** (each entry in `compromises.md` notes the specific version it was checked against). Before converting, check the [ltx-talk changelog](https://github.com/josephwright/ltx-talk/blob/main/CHANGELOG.md) and [open issues](https://github.com/josephwright/ltx-talk/issues) — some workarounds may no longer be needed.
 
 ---
 

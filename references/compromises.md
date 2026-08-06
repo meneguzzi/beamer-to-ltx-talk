@@ -1,7 +1,8 @@
 # Beamer → ltx-talk: compromises & incompatibilities
 
-Catalogue of problems found converting a real course to **ltx-talk v0.5.0** (released
-2026-04-30; dev branch needs LaTeX kernel 2026-06-01). Each entry: **symptom → cause →
+Catalogue of problems found converting two real courses (11 decks, then 20) to **ltx-talk,
+verified across 0.5.0–0.5.2** (0.5.0 released 2026-04-30; dev branch needs LaTeX kernel
+2026-06-01). Each entry notes the specific version it was verified against. Each entry: **symptom → cause →
 workaround → revisit when**. Most only appear under tagging (`\DocumentMetadata`), which is
 why they are absent from the upstream quick-start docs.
 
@@ -79,6 +80,13 @@ why they are absent from the upstream quick-start docs.
 - **Workaround:** convert to `\frametitle{…}`:
   `\begin{frame}[c]` then `\frametitle{Objectives}`. Renders correctly in the header.
 - **Do NOT** "fix" this by loading `frame-title-arg` → see C-MAKETITLE.
+- ⚠ **A leading `<overlayspec>` before `[opts]`** (`\begin{frame}<3>[c]{Title}` — legal
+  Beamer, overlay spec ahead of the options bracket) was, until found on a real course,
+  invisible to **both** `convert_deck.py` **and** the Step-4 verification grep — it fell
+  through every regex (`^...\\begin\{frame\}(\[...\])?\{`) and reported as a false-clean
+  "no orphan titles" while the frame was still unconverted. Both regexes now accept an
+  optional `(<[^>]*>)?` ahead of the options group. Only 2 instances found in one course,
+  but they cost nothing to miss silently — always spot-check.
 - **Revisit when:** n/a — `\frametitle` is the documented primary form; keep using it.
 
 ## C-FRAMETITLE-NESTED — the convert script silently skips nested-brace titles  ⚠ silent
@@ -294,6 +302,14 @@ why they are absent from the upstream quick-start docs.
 - **Theorems:** `\newtheorem*` is incomplete (issue #219). Use tcolorbox instead — see C-BLOCK-ALGO.
 - **Media:** `media9 \includemedia`, `\movie`, `\animategraphics` are untested under tagging —
   verify case-by-case or fall back to a static image + hyperlink.
+  ⚠ **If you drop `media9` from the preamble** (the template does not load it by default)
+  **but a deck still has `\includemedia{...}` in the body**, the failure is a multi-error
+  cascade — `Undefined control sequence`, `Illegal unit of measure`, `Misplaced alignment tab
+  character &` (from the unparsed `flashvars` string) — none of which names the missing
+  package. Step 0.4's survey grep (`\includemedia|\movie|\animategraphics`) exists precisely
+  to catch this before it happens: if it hits, either keep `media9` loaded in that deck's
+  preamble, or remove the `\includemedia` call and use the deck's own fallback link/image
+  (most `\includemedia` sites already carry one, e.g. a YouTube URL in the same frame).
 - **Revisit when:** the cited issues close.
 
 ## C-BLOCK-ALGO — `\begin{block}` conflicts with algorithmicx  ⚠️ non-obvious
@@ -321,14 +337,23 @@ why they are absent from the upstream quick-start docs.
 - **Revisit when:** ltx-talk issue #205 / #219 land a stable `\newtheorem` / block environment
   that does not interfere with `algorithmicx`.
 
-## C-OVERLAY-ALIGN — overlay tokens inside `tabular`/`align*` break alignment
+## C-OVERLAY-ALIGN — `\onslide` inside `tabular`/`align*` breaks alignment
 
 - **Symptom:** `! Misplaced alignment tab character &` or `! Improper \halign inside $'s` when
-  an overlay command (`\onslide`, `\visible`, `\only`) wraps an entire row including `&` or
-  `\\`: e.g. `\onslide<2>{& = formula \\}` or `\onslide<+->{cell1 & cell2 \\}`.
+  `\onslide<n>{…}` wraps an entire row including `&` or `\\`: e.g. `\onslide<2>{& = formula
+  \\}` or `\onslide<+->{cell1 & cell2 \\}`.
 - **Cause:** `&` and `\\` must be at the **top level** of a `tabular`/`align*` environment
-  (they are active inside the `\halign`). Wrapping them in a group (even a non-expanded one)
-  removes them from that top level and TeX errors out.
+  (they are active inside the `\halign`). `\onslide<n>{…}` expands to a genuine brace group
+  around its content (C-ONSLIDE-ARG's leak is a side effect of the same mechanism), so
+  wrapping `&`/`\\` in it removes them from that top level and TeX errors out.
+- ⚠ **This is specific to `\onslide`.** An earlier version of this entry named
+  `\visible`/`\only` as equally hazardous. Verified false on a real course (20+ instances of
+  `\uncover<+->{cell & cell \\ \hline}` and `\only<2->{1 & 0 & 0\\}`, all compiling with 0
+  errors and rendering correctly across the full overlay sequence): `\only` fully includes or
+  fully omits its content (`ltx-talk.cls`'s `\__talk_if_overlay:nT`), and `\uncover` typesets
+  the content unconditionally and only toggles opacity — neither mechanism exposes `&`/`\\`
+  to `\halign` mid-group the way `\onslide`'s stray-group-plus-leaking-declaration does.
+  `\uncover`/`\only` around a full row are safe; only `\onslide` needs the workaround below.
 - **Workaround:** keep `&` and `\\` at the top level; wrap only the **content**:
   ```latex
   % tabular — use <.-> on cols 2+ to share the same overlay step
@@ -345,14 +370,18 @@ why they are absent from the upstream quick-start docs.
 ## C-OVERLAY-ALGO — `\onslide{\State…}` corrupts algorithmicx block tracking
 
 - **Symptom:** `! Missing \endcsname inserted` / `! Extra \endcsname` at `\end{frame}` in
-  frames that use `\begin{algorithmic}` AND wrap `\State` in an overlay command:
-  `\onslide<2>{\State formula}`. In practice this only bites when the wrapped `\State` sits
-  **nested inside** `\If`/`\ForAll`/`\Loop`; a top-level `\only<1>{\State …}` is harmless,
-  and an overlay inside a `\Function` *name* is fine.
+  frames that use `\begin{algorithmic}` AND wrap `\State` in **any** overlay command —
+  `\onslide<2>{\State formula}`, `\uncover<2>{\State formula}`, and `\only<2>{\State formula}`
+  all trigger it identically; this is not specific to `\onslide`. In practice this only bites
+  when the wrapped `\State` sits **nested inside** `\If`/`\ForAll`/`\Loop`; a top-level
+  `\only<1>{\State …}` (not nested in a block) is harmless, and an overlay inside a
+  `\Function` *name* is fine.
 - **Cause:** algorithmicx tracks nesting depth with `\csname`-based counters
-  (`\ALG@b@N@EndFor`, `\ALG@currentblock`). Wrapping `\State` in a group (`\onslide{…}`)
-  scopes the push but not the pop of those counters, leaving them permanently mismatched.
-  `\end{frame}` then sees unbalanced `\endcsname` pairs.
+  (`\ALG@b@N@EndFor`, `\ALG@currentblock`). Wrapping `\State` in **any** brace group —
+  regardless of which overlay macro opens it — scopes the push but not the pop of those
+  counters, leaving them permanently mismatched. `\end{frame}` then sees unbalanced
+  `\endcsname` pairs. (The lint rule already matches `onslide|only|visible|uncover`; this is
+  a documentation fix, not a detection gap.)
 - **Workaround:** keep the **structural token at the top level** and wrap only its
   *content* — the same principle as C-OVERLAY-ALIGN:
   ```latex
@@ -400,11 +429,44 @@ why they are absent from the upstream quick-start docs.
   layout stable across overlays. Bare `\onslide<2->` with no group remains valid ltx-talk and
   should be left alone.
 - **Scale:** in one 11-deck course this pattern appeared **139 times** and was invisible in
-  every "builds clean" report. The mechanical fix is
+  every "builds clean" report; a 20-deck course had 204 more. The mechanical fix is
   `\onslide<spec>{` → `\uncover<spec>{` (skip commented-out lines); page counts should be
   **unchanged** afterwards, which is a good invariant to assert.
+  ⚠ **That mechanical fix breaks if the group being rewritten wraps a whole
+  `tabular`/`align*`/`cases`/`matrix` environment**, not just a cell's content — the `&`/`\\`
+  inside belong to that environment's own alignment, and a blind regex swap can leave you
+  with a corrupted brace count (mismatched `\begin`/`\end` inside the new `\uncover{…}`).
+  Caught in practice on a real course. Anyone scripting this fix beyond `convert_deck.py`'s
+  `--lint`-only stance (see the note under Step 2 in `SKILL.md` — this rewrite is deliberately
+  left manual, not automated, precisely because it needs this kind of judgement) should
+  first check the group doesn't contain a `\begin{tabular}`/`\begin{align*}`/etc.
 - **Revisit when:** ltx-talk gives `\onslide` a `+m` argument form for Beamer compatibility.
   Track against `\NewDocumentCommand \onslide` in `ltx-talk.cls`.
+
+## C-OVERLAY-MULTIPASS — `\only` rows relying on Beamer's per-page re-typesetting need a `\\` ltx-talk doesn't
+
+- **Symptom:** `! Extra alignment tab has been changed to \cr.` (repeated, once per row) in a
+  `tabular` built from consecutive `\only<N>{cell1 & cell2 & cell3}` rows **with no trailing
+  `\\`** on any of them.
+- **Cause:** Beamer *re-typesets the frame once per overlay page*, so on overlay page N only
+  the matching `\only<N>{…}` branch is ever expanded — every other row vanishes from the
+  source entirely, and whichever row survives is always the table's last, so it needs no row
+  terminator. ltx-talk instead typesets the frame **once**, expands **every** overlay branch
+  into the same `\halign`, and toggles visibility afterwards via PDF OCG layers (see
+  C-ONSLIDE-ARG/C-OVERLAY-ALIGN for the same single-pass model). Under that model all N rows
+  genuinely coexist in one alignment, and every row but the last needs its own `\\` — a
+  Beamer deck written assuming re-typesetting silently violates that.
+- **Workaround:** add the missing `\\` to every row but the last:
+  ```latex
+  \only<1>{a & b & c} \\
+  \only<2>{d & e & f} \\
+  \only<3>{g & h & i}     % last row: no trailing \\
+  ```
+- **Detect:** not caught by `--lint` (it is a missing token, not a hazardous pattern) — only
+  surfaces at compile as `Extra alignment tab`. If a table built from stacked `\only<N>{row}`
+  lines fails this way, check for a missing `\\` before chasing anything else.
+- **Revisit when:** n/a — this is the same single-pass-vs-multi-pass model difference behind
+  C-ONSLIDE-ARG and C-OVERLAY-ALIGN, just manifesting as a missing token instead of a leak.
 
 ## C-DISPMATH-NEWLINE — `\\` after display math is invalid
 
@@ -414,6 +476,15 @@ why they are absent from the upstream quick-start docs.
   horizontal/paragraph mode.
 - **Workaround:** replace `\\[Ncm]` with `\vspace{Ncm}` and bare `\\` with a blank line
   (paragraph break).
+- ⚠ **The `--lint` pattern only matches `\\` directly after `$$…$$`/`\]`** — it misses the
+  identical failure when the `\\` follows the **closing `}` of an overlay group** whose
+  content ends in display math or an image (`\only<n>{$$…$$} \\`, `\uncover<n>{...}\\`): the
+  group doesn't change TeX's mode, so the math inside still leaves it in vertical mode, and
+  the error is the same "no line here to end" — but now reported after a `}`, not a `$$`, so
+  the grep-based lint doesn't fire. Found 11 such instances across 3 decks on a real course,
+  none flagged. If you hit this error and the preceding token is `}` rather than math or
+  `\]`, look *inside* the group for display math/an image before assuming the lint missed
+  nothing.
 - **Revisit when:** n/a — this is a fundamental LaTeX constraint.
 
 ## C-CALL-NEST — classic `\Call` cannot nest  (bites *after* the C-ALGO engine swap)
@@ -704,6 +775,7 @@ why they are absent from the upstream quick-start docs.
 | `Unknown color '\ThemeAccent'` (once per frame) | template key won't expand a macro | C-EDITINSTANCE-EXPAND |
 | `Command \columns already defined` | pasted the template's stubs; they're native | C-NATIVE-ENVS |
 | `Improper \halign inside $'s` | overlay around `&`/`\\` in `tabular`/`align*` | C-OVERLAY-ALIGN |
+| `Extra alignment tab has been changed to \cr` | stacked `\only<N>{row}` table with no `\\` (relied on Beamer's per-page re-typesetting) | C-OVERLAY-MULTIPASS |
 | `Misplaced alignment tab character &` | overlay around `&` in `tabular` | C-OVERLAY-ALIGN |
 | `You can't use \halign in math mode` | multi-line `\State{…\\…}` (algpseudocodex) | C-ALGO |
 | `Missing \endcsname` / `Extra \endcsname` at `\end{frame}` | `\begin{block}`+algorithmic | C-BLOCK-ALGO |
