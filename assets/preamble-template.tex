@@ -10,13 +10,43 @@
 %%    visual style is driven by the kernel template system via \EditInstance.
 
 %% ---------------------------------------------------------------------------
+%% Accessibility: two lines that a PDF/UA checker will otherwise reject every
+%% deck in the course over. Both are pure tagging — no visual change at all.
+%% See references/compromises.md A-HEADINGS and A-MATHALT.
+%%
+%%  * ltx-talk hard-codes frametitle -> H4, while \section is H1, so the first
+%%    heading in a deck is an orphan H4 ("headings do not begin at level one").
+%%    H2 sits directly under the section H1.
+%%  * math/alt/use puts an /Alt on every Formula element. Without it a checker
+%%    reports inline maths as an image with no description. It is switched on
+%%    automatically for pdfstandard=ua-1, but NOT for ua-2.
+%% ---------------------------------------------------------------------------
+\tagpdfsetup{role/new-tag = frametitle / H2}
+\tagpdfsetup{math/alt/use}
+
+%% ---------------------------------------------------------------------------
 %% Colours
+%%
+%% Emphasis colours are darkened for WCAG AA (>= 4.5:1 on white); the saturated
+%% originals look fine on a projector and fail a checker. Ratios in comments.
+%% If you add your own, measure it — see compromises.md A-CONTRAST for the
+%% formula and the >=200 dpi caveat.
 %% ---------------------------------------------------------------------------
 \usepackage{xcolor}
 \definecolor{cream}{rgb}{1,0.99,0.89}
 \definecolor{myellow}{rgb}{0.95,0.33,0}
-\definecolor{green}{rgb}{0.2,0.8,0}
-\definecolor{blue}{rgb}{0.0039,0.274,1}
+% \definecolor{green}{rgb}{0.2,0.8,0}                    % 2.15:1 — fails AA
+\definecolor{green}{rgb}{0,0.50,0}                       % 5.17:1
+\definecolor{blue}{rgb}{0.0039,0.274,1}                  % 6.33:1
+%% Decks write {\color{red}...} inline far more often than they use a macro.
+%% Redefining the name once fixes every site — but ONLY if nothing uses red
+%% graphically. Check first:
+%%   grep -hoE '(draw|fill|text|color)\s*=\s*red[^,;}]*|red![0-9]+' *.tex
+\definecolor{red}{rgb}{0.75,0,0}                         % was 1,0,0 = 4.00:1
+\definecolor{aired}{rgb}{0.75,0,0}                       % 6.52:1
+\definecolor{aiteal}{rgb}{0.05,0.40,0.40}                % 6.75:1 (was teal!80)
+\definecolor{aiorange}{rgb}{0.68,0.33,0}                 % 5.17:1 (was orange)
+\definecolor{aigreen}{rgb}{0,0.50,0}                     % 5.17:1 (was dkgreen)
 \definecolor{lightblue}{rgb}{0.8,1,1}
 \definecolor{yellow}{rgb}{1,0.99,0.3}
 \definecolor{BoxCol}{rgb}{0.95,0.33,0}
@@ -252,7 +282,12 @@
   \begin{frame}
     \centering
     \vfill
-    {\color{\ThemeAccent}\Huge\bfseries #1}\par\vspace{0.5em}
+    %% A-HEADINGS: the deck title is the document's only H1 above the section
+    %% dividers, so without this the first frametitle is an orphan heading.
+    %% Tagged by hand — this is plain text in a frame, not a sectioning
+    %% command, so nothing tags it for you (\title roles to /Title -> P).
+    {\color{\ThemeAccent}\Huge\bfseries
+     \tagstructbegin{tag=H1}\tagmcbegin{}#1\tagmcend\tagstructend}\par\vspace{0.5em}
     {\Large #2}\par\vspace{2.5em}
     {\large \AuthorLong}\par\vspace{0.4em}
     {\small\ttfamily \AuthorEmails}\par\vspace{0.4em}

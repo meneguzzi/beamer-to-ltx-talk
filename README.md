@@ -78,6 +78,8 @@ scripts/
   fix_frame_titles.py     # Second pass: brace-matched titles convert_deck.py can't see
   alt_text_audit.py       # Lists \includegraphics missing alt= text
   alt_text_apply.py       # Writes alt= text back into the source
+  table_audit.py          # Classifies every tabular: data table (needs TH) vs
+                          # layout grid (needs table/tagging=div) — A-TABLE-TH
 
 SKILL.md                  # Agent instructions (step-by-step protocol)
 ```
@@ -119,6 +121,18 @@ Full details — including error signatures and workarounds — are in [`referen
 | **C-CENTER-ARG** | `\center{…}` used as a command → tag tree corrupts, error lands **far away** | `\begin{center}…\end{center}` |
 | **C-OVERLAY-ALGO** | `\State<2>` → overlay **silently dropped**; line shows on every slide | `\State \onslide<2>{…}` |
 | *(alt text)* | `\includegraphics` without `alt=` → screen reader reads out **the filename** | `alt_text_audit.py` |
+
+Failures that survive **all** of the above — clean compile, `Tagged: yes`, 0 tagpdf errors,
+every image described — and are found only by running a real PDF/UA checker (**Step 6b**):
+
+| ID | Silent failure | Fix |
+|---|---|---|
+| **A-HEADINGS** | ltx-talk roles `frametitle` to `H4` and nothing is an `H1` → "headings do not begin at level one" | `role/new-tag = frametitle / H2`, tag the deck title `H1` |
+| **A-MATHALT** | `Formula` elements carry no `/Alt` → maths reported as undescribed images | `\tagpdfsetup{math/alt/use}` |
+| **A-TABLE-TH** | Every `tabular` is a `Table` with no `TH`, layout grids included — and the settings **leak** between tables | State all three keys per table (`table/tagging=…,header-rows=…,header-columns=…`), or `table/tagging=div`; `table_audit.py` |
+| **A-CONTRAST** | Saturated emphasis colours are <4.5:1 on white | Darken the palette **and** the raw `\color{red}` sites |
+
+The first two are one-line preamble fixes, already in `preamble-template.tex`.
 
 Errors the compiler *does* report:
 

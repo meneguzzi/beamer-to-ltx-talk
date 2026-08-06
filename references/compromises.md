@@ -243,9 +243,14 @@ why they are absent from the upstream quick-start docs.
     are adjacent;
   - adding tagging phases (`block`, phase-II, phase-III) — no effect;
   - `\lstinputlisting` from an external file in a normal `frame` — still 2 errors.
-- **Trade-off:** the code/verbatim slide becomes an **artifact** — it is not in the
-  screen-reader reading order. If the code matters pedagogically, put an explanatory tagged
-  line *outside* the `frame*`.
+- **Trade-off — larger than it looks:** the hooks suspend tagging for the **whole
+  environment**, so *everything* on that slide becomes an artifact, not just the listing. The
+  prose, the itemize, any `tabular`, any figure — none of it is in the screen-reader reading
+  order, and any `\tagpdfsetup` you write inside the frame is **inert**. This surfaces later
+  as a phantom bug ("why does this table have no `TH`?"); it is this compromise, not a table
+  problem. Keep a `frame*` down to the listing plus the minimum around it, put anything that
+  matters pedagogically *outside* the frame as tagged content, and audit how much of the
+  course is inside `frame*`: `grep -c 'begin{frame\*}' week*/*.tex`.
 - **Revisit when:** ltx-talk's `frame*` stops re-tokenising, or `listings` becomes tag-aware.
 
 ## C-NOBEAMER — all `\usetheme`/`\setbeamer*`/`\usebeamerfont` are undefined
@@ -497,6 +502,169 @@ why they are absent from the upstream quick-start docs.
 
 ---
 
+# A-* — accessibility-checker findings (compile clean, tag clean, still fail)
+
+> These four are a **different class** from everything above. The deck compiles, `pdfinfo`
+> says `Tagged: yes`, the log has zero tagpdf errors — and a PDF/UA checker still rejects it.
+> `Tagged: yes` means *a tag tree exists*, not that it is correct. Found by running a real
+> checker over a course that had passed every gate in this skill.
+>
+> **Do a checker pass before declaring a conversion done** (SKILL.md Step 6b).
+
+---
+
+## A-HEADINGS — every frame title is an orphan `H4`  ⚠ affects every deck
+
+- **Symptom:** the checker reports *"the headings in this PDF do not begin at level one"*,
+  usually naming the first content slide.
+- **Cause:** `ltx-talk.cls` hard-codes `role/new-tag = frametitle / H4` (v0.5.2, line 192).
+  Meanwhile `\section` is `H1`. So the heading tree of a typical deck runs `H4, H1, H4, H4,
+  …`: the document opens on an H4 with no H1 above it, and H1→H4 skips two levels. Nothing
+  on a title page is a heading at all — `\title` maps to `/Title`, roled to `P`.
+- **Workaround:** two changes, both in the shared preamble:
+  ```latex
+  \tagpdfsetup{role/new-tag = frametitle / H2}   % sits directly under the section H1
+  ```
+  and make the deck title the document's `H1` by hand — it is plain text inside a frame, not
+  a sectioning command, so nothing tags it for you:
+  ```latex
+  {\Huge\bfseries \tagstructbegin{tag=H1}\tagmcbegin{}#1\tagmcend\tagstructend}
+  ```
+  Verified on a 20-deck course: no visual change, page counts unchanged, 0 tagpdf errors.
+- **Check:** `grep -aoE '/S\s*/H[0-9]' qdf.pdf | sort | uniq -c` — there must be ≥1 `H1`, and
+  `frametitle` must role to exactly one level below the section.
+- **Revisit when:** ltx-talk makes the frametitle level configurable, or roles it relative to
+  the sectioning depth actually in use.
+
+---
+
+## A-MATHALT — inline maths is reported as an undescribed image
+
+- **Symptom:** the checker lists *"images without a description"* and points at slides whose
+  only "images" are `$x^2$`, `$\approx$`, a `$$…$$`. Confusing, because every
+  `\includegraphics` already has `alt=`.
+- **Cause:** each maths group becomes a `/S /Formula` element, and PDF/UA wants `/Alt` on it.
+  `latex-lab` will supply one from the TeX source, but the switch is off by default:
+  `math/alt/use` is auto-enabled for `pdfstandard=ua-1` **only**, and stays off for `ua-2`
+  (`latex-lab-math.ltx`, the `begindocument/end` hook).
+- **Workaround:** `\tagpdfsetup{math/alt/use}` in the shared preamble. Every `Formula` then
+  carries an `/Alt` derived from the source ("LaTeX formula starts \begin {math} A \end
+  {math} LaTeX formula ends"). Verbose, but valid, and it costs one line.
+- **Caveat:** this is a *floor*, not good alt text. For a deck built around a handful of
+  important equations, write real descriptions; the auto text is right for the long tail
+  of stray `$n$`s.
+- **Check:** `grep -c 'Alternative text for graphic is missing' deck.log` covers **graphics
+  only** and will not catch this. Look for `/Alt` on `/S /Formula` in the PDF instead.
+
+---
+
+## A-TABLE-TH — every `tabular` is a data table with no header cells
+
+- **Symptom:** *"this PDF contains tables that are missing headers"*, one report per
+  `tabular` in the deck — including the ones that are not tables at all.
+- **Cause:** `latex-lab` tags every `tabular` as `Table`/`TR`/`TD` and never guesses which
+  row or column is the header. Slide decks make this worse than papers do, because `tabular`
+  is routinely used for pure *layout*: a 2×2 quadrant of prose, a key/value list, a row of
+  images.
+- **Workaround:** classify each table, then declare it. The test is
+  **"does a cell still make sense read aloud on its own, with no column name attached?"**
+  - *No* → data table. Declare the headers **immediately before** `\begin{tabular}`:
+    ```latex
+    \tagpdfsetup{table/header-rows={1}}                              % header row
+    \tagpdfsetup{table/header-rows={1,2},table/header-columns={1,2}} % both axes
+    ```
+    Multi-level headers work, and the label column need not be column 1
+    (`header-columns={4}` is fine). `\multicolumn`/`\multirow` spans are honoured: the
+    emitted `/TH` carry correct `/TH-col`, `/TH-row`, `/TH-both` and `colspan-N`.
+  - *Yes* → layout grid. **Do not invent a header row.** Demote it out of the tree:
+    ```latex
+    \tagpdfsetup{table/tagging=div}
+    ```
+    which retags `Table`→`Div`, `TR`→`NonStruct`, `TD`→ a text block. The grid leaves the
+    semantic tree entirely and the cells are simply read in visual order.
+    (`table/tagging=presentation` keeps `Table`/`TR`/`TD` plus an ARIA presentation
+    attribute — weaker, and some checkers still complain. Prefer `div`.)
+- ⚠ **Every declaration must state all three keys — these settings leak.** Nothing resets
+  them at `\end{tabular}`:
+  - `table/tagging=div` swaps the tag names and **nothing swaps them back**. The
+    `header-rows`/`header-columns` keys do *not* restore them, so one layout table silently
+    demotes every later table in the same group to `Div`.
+  - `table/tagging=true` restores the names but does **not** clear the header lists, so the
+    previous table's `header-rows={1,2}` leaks into the next one.
+
+  So write every data table as order-independent, with empty lists where not wanted:
+  ```latex
+  \tagpdfsetup{table/tagging=true,table/header-rows={1},table/header-columns={}}
+  ```
+  (`div` clears both lists itself, so it needs no extra keys.) Getting this wrong cost 7
+  mis-tagged tables across two decks on the course above, and **the build stays green**:
+  clean compile, `Tagged: yes`, 0 tagpdf errors. Only counting the structure elements
+  catches it.
+- ⚠ **A `tabular` inside a `frame*` is not tagged at all** — no `Table`, no `TD`, no `TH`,
+  and your `\tagpdfsetup` there is inert. The `frame*` tagging hooks (C-FRAMESTAR-TAG) wrap
+  the whole environment in `\tag_stop:`, so *everything* on a listing slide is invisible to a
+  screen reader, tables included. Don't chase it as a table bug; it is the known cost of
+  C-FRAMESTAR-TAG. Either leave the declaration in place (it becomes correct the moment
+  `frame*` tagging is fixed — say so in the comment) or move the table out of the `frame*`.
+- **Scale, and a warning:** on a 20-deck course, 47 live tabulars — 9 layout, 35 taggable
+  data tables, 3 stranded inside `frame*` — and **18 of the data ones needed *both* axes**
+  (payoff matrices, joint probability tables, quiz grids). A "first row is bold" heuristic
+  classified most of those 18 wrongly. Render the slide and look at it; the header rows that
+  matter most are often not bold.
+  Also: a plain `grep -c 'begin{tabular}'` badly overcounts — on that course 36 of 83 hits
+  were inside commented-out slides. Strip comments before auditing.
+- **Check — build an oracle *before* you apply.** From the audit, write down the expected
+  number of data tables per deck; after the build, count what is actually in the PDF and
+  compare. Nothing else catches the leak above.
+  ```sh
+  qpdf --qdf --object-streams=disable deck.pdf qdf.pdf
+  grep -acE '/S /Table' qdf.pdf ; grep -acE '/S /TH' qdf.pdf
+  ```
+  ⚠ When globbing for the PDF, **exclude handouts**: `deck-handout.pdf` sorts *before*
+  `deck.pdf` (`-` < `.`), so `ls week*/deck-*.pdf | head -1` hands you a stale handout and a
+  confidently wrong answer. This is the "measure against a build that actually ran" trap
+  wearing a different hat.
+
+---
+
+## A-CONTRAST — the emphasis palette fails WCAG AA
+
+- **Symptom:** *"this PDF contains text with insufficient contrast"*, naming slides with
+  coloured emphasis.
+- **Cause:** the saturated colours decks inherit from Beamer habits look fine on a projector
+  and fail the 4.5:1 body-text threshold on white. Measured, against white:
+  `red` 4.00, `teal!80` 3.41, `orange` 2.53, `green` 2.15, `dkgreen` 3.78 — all fail.
+- **Workaround:** darken, keeping the hue. 5-7:1 leaves headroom and stays distinguishable:
+  ```latex
+  \definecolor{aired}{rgb}{0.75,0,0}          % 6.52  (was red,     4.00)
+  \definecolor{aiteal}{rgb}{0.05,0.40,0.40}   % 6.75  (was teal!80, 3.41)
+  \definecolor{aiorange}{rgb}{0.68,0.33,0}    % 5.17  (was orange,  2.53)
+  \definecolor{aigreen}{rgb}{0,0.50,0}        % 5.17  (was dkgreen, 3.78)
+  ```
+- **Do not stop at the `\textred`-style macros.** Decks also write `{\color{red}…}` inline —
+  on the course above, 46 times, bypassing every macro. If (and only if) no figure or tikz
+  picture uses the colour *graphically*, redefining the standard name once in the preamble
+  fixes every site at a stroke:
+  ```latex
+  \definecolor{red}{rgb}{0.75,0,0}
+  ```
+  Check that precondition first:
+  `grep -hoE '(draw|fill|text|color)\s*=\s*red[^,;}]*|red![0-9]+' week*/*.tex`
+- **Check:** render at **≥200 dpi** and measure the actual ink. Anti-aliasing at 70-90 dpi
+  invents intermediate colours and buries the real ones in the histogram.
+  ```python
+  def lum(c):
+      f = lambda v: v/12.92 if v <= 0.03928 else ((v+0.055)/1.055)**2.4
+      r, g, b = [x/255 for x in c[:3]]
+      return 0.2126*f(r) + 0.7152*f(g) + 0.0722*f(b)
+  contrast_vs_white = 1.05 / (lum(rgb) + 0.05)      # want >= 4.5
+  ```
+- **False positive to expect:** a `\fcolorbox{black}{white}{…}` may be reported as a contrast
+  failure although every pixel in it measures ≥11:1 — the checker appears to compare the
+  box's white *fill* against the white page. Measure before you chase it.
+
+---
+
 ## Quick error → cause map
 
 > ⚠ **The worst failures in this catalogue produce NO error at the offending line.**
@@ -508,6 +676,15 @@ why they are absent from the upstream quick-start docs.
 > | `\State<2>` used as an overlay spec | overlay never fires; literal **`<2>` printed on the slide** | C-OVERLAY-ALGO |
 > | `\center{…}` used as a command | tag tree corrupts; error lands **far away**, or in another frame | C-CENTER-ARG |
 > | `\includegraphics` without `alt=` | screen reader reads out **the filename** | see `alt-text.md` |
+>
+> And four more that survive *every* check in this skill — clean compile, `Tagged: yes`,
+> 0 tagpdf errors — and are only caught by an actual PDF/UA checker:
+> | Silent failure | Symptom | Entry |
+> |---|---|---|
+> | frame titles roled `H4` by the class | "headings do not begin at level one" | A-HEADINGS |
+> | `Formula` elements with no `/Alt` | "images without a description", pointing at maths | A-MATHALT |
+> | every `tabular` is a `Table` with no `TH` | "tables missing headers", including layout grids | A-TABLE-TH |
+> | saturated emphasis colours | "text with insufficient contrast" | A-CONTRAST |
 >
 > Three of these are invisible to `pdftotext` as well as to the compiler: hidden overlay
 > content stays in the PDF text layer. **Render the page** (`pdftoppm -f N -l N -png`) to

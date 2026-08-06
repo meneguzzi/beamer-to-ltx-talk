@@ -28,7 +28,10 @@ the upstream docs because they only surface under *tagging* (`\DocumentMetadata`
 > - `references/compromises.md` — the catalogue of incompatibilities, with symptom, cause,
 >   workaround, and "revisit when". **This is the heart of the skill.**
 > - `references/alt-text.md` — how to write the alt text (Step 6). Tagging without alt text
->   is not accessibility.
+>   is not accessibility. And alt text alone is not enough either — see the **A-\*** entries
+>   in `compromises.md` for the four things a PDF/UA checker still rejects (Step 6b).
+> - `scripts/table_audit.py` — classifies every `tabular` in a course as data table or layout
+>   grid, the input to the A-TABLE-TH work.
 > - `assets/preamble-template.tex` — the deployable ltx-talk shared preamble (copy to the project and fill in the Identity and ThemeAccent blocks at the top).
 > - `scripts/convert_deck.py` — the pattern-based source transformer (frametitles,
 >   sections, title page, verbatim frames, empty titles).
@@ -60,6 +63,12 @@ the upstream docs because they only surface under *tagging* (`\DocumentMetadata`
 > Also: **measure against a build that actually ran.** Beamer + `\DocumentMetadata` is fatal,
 > so a half-migrated repo can leave stale PDFs lying around, and `pdfinfo` will happily read
 > them and give you a confident, wrong baseline.
+>
+> And: **`Tagged: yes` is not a pass.** It says a tag tree exists, not that it is right. Four
+> further failures survive a clean compile, `Tagged: yes`, 0 tagpdf errors *and* complete alt
+> text, and only a real PDF/UA checker finds them — orphan `H4` frame titles, `Formula`
+> elements with no `/Alt`, `tabular`s with no `TH`, and sub-4.5:1 emphasis colours. Two are
+> one-line preamble fixes: **put them in at Step 1** (A-HEADINGS, A-MATHALT). See Step 6b.
 >
 > And **verify overlays by rendering pages, never with `pdftotext`** — hidden overlay content
 > stays in the PDF text layer, so extraction reports text that is invisible on the slide.
@@ -138,6 +147,17 @@ Also add, up front, the things every real deck turns out to need (all catalogued
 the `frame*` tagging hooks (**C-FRAMESTAR-TAG** — without these, listings destroy the tag
 tree), the nesting-safe `\Call` (**C-CALL-NEST**), tcolorbox theorem environments
 (**C-THEOREM**), and `\ifmmode`-guarded `\sc`/`\it`/`\bf` stubs (**C-OLDFONT**).
+
+**And these two lines, which cost nothing now and a full re-verification pass later:**
+```latex
+\tagpdfsetup{role/new-tag = frametitle / H2}  % else every frame title is an orphan H4
+\tagpdfsetup{math/alt/use}                    % else Formula elements carry no /Alt
+```
+Without them a PDF/UA checker rejects **every** deck in the course for "headings do not begin
+at level one" and "images without a description" — even though the compile is clean, the
+output says `Tagged: yes`, and every graphic has `alt=` (**A-HEADINGS**, **A-MATHALT**).
+While you are in `\coursetitlepage`, tag the deck title as the document's `H1`; nothing else
+in a deck is one. See Step 6b.
 
 The ltx-talk preamble **requires** `\DocumentMetadata` (it uses `\tag_stop:`, `\EditInstance`).
 It is a **one-for-one replacement** for the Beamer preamble — load one or the other, never
@@ -280,6 +300,10 @@ pdftoppm -png -r 70 -f 1 -l 4 deck.pdf /tmp/new            # eyeball title/headi
 For a course, wire this into a `check` build target so it fails on *unsound* output, not just
 on a failed compile.
 
+> ⚠ **`Tagged: yes` means a tag tree exists, not that it is correct.** A deck can pass every
+> line above and still be rejected by a PDF/UA checker — for four reasons that produce no
+> compiler output at all. Do **Step 6b** before calling a conversion done.
+
 ---
 
 ## Step 5 — Handout build wiring
@@ -323,6 +347,66 @@ filename or the frame title without viewing the image.**
 **Alt text is pedagogy, not metadata** — it decides what a blind student learns from the
 slide. Generated alt text is a **draft for the author to review**, never a silent commit.
 
+---
+
+## Step 6b — The accessibility-checker pass (Steps 1-6 are not sufficient)
+
+Alt text on the graphics is necessary and **not sufficient**. A course that passed every gate
+in this skill — clean compile, `Tagged: yes`, 0 tagpdf errors, every image described — was
+still rejected by a real PDF/UA checker on four counts. Read the **A-\*** section of
+`references/compromises.md`; all four are catalogued with verified fixes.
+
+| Checker complaint | Cause | Fix |
+|---|---|---|
+| "headings do not begin at level one" | ltx-talk roles `frametitle` to `H4`, and a title page has no heading at all | `role/new-tag = frametitle / H2` + tag the title as `H1` — **A-HEADINGS** |
+| "images without a description", pointing at *maths* | `Formula` elements get no `/Alt`; the switch is auto-on for ua-**1** only | `\tagpdfsetup{math/alt/use}` — **A-MATHALT** |
+| "tables missing headers" | every `tabular` is tagged `Table`/`TR`/`TD`, never `TH` | classify each: `table/header-rows`/`header-columns`, or `table/tagging=div` for layout grids — **A-TABLE-TH** |
+| "text with insufficient contrast" | saturated emphasis colours are <4.5:1 on white | darken the palette *and* the raw `\color{red}` sites — **A-CONTRAST** |
+
+The first two are one-line preamble fixes that solve the whole course at once — **apply them
+in Step 1 and save yourself the round trip.** The last two need per-deck work.
+
+Two of these are structural rather than cosmetic, and both need judgement you cannot script:
+
+- **Tables.** The classifying question is *"does a cell still make sense read aloud on its
+  own, with no column name attached?"* If yes it is a layout grid — demote it with
+  `table/tagging=div` and **do not invent a header row**. If no it is a data table and needs
+  real `TH`, often on *both* axes. Do not trust a "first row is bold" heuristic: on a real
+  course it misclassified 18 of the most important tables (payoff matrices, joint probability
+  tables), whose header rows are not bold. Render the slide and look.
+
+  Two traps when you apply it, both of which leave the build **green**:
+  1. **The settings leak.** Nothing resets them at `\end{tabular}`, and the keys only
+     partially reset each other, so one `table/tagging=div` silently demotes every later
+     table in the group. Write each data table with all three keys —
+     `table/tagging=true,table/header-rows={1},table/header-columns={}` — so it is
+     order-independent.
+  2. **A `tabular` inside a `frame*` is not tagged at all**, and your `\tagpdfsetup` there is
+     inert — C-FRAMESTAR-TAG suspends tagging for the whole environment. Don't debug it as a
+     table problem.
+
+  So **build an oracle before you apply**: from the audit, write down the expected number of
+  data tables per deck, then count `/S /Table` and `/S /TH` in the built PDF and compare.
+  Nothing else catches either trap.
+- **Contrast.** Measure the rendered ink at **≥200 dpi** — at 70-90 dpi anti-aliasing invents
+  intermediate colours and hides the real ones. And expect at least one false positive: a
+  `\fcolorbox{black}{white}` gets reported although every pixel in it is ≥11:1.
+
+Then re-verify against the PDF structure itself, not the log:
+```sh
+qpdf --qdf --object-streams=disable deck.pdf qdf.pdf
+grep -aoE '/S\s*/[A-Za-z0-9]+' qdf.pdf | tr -s ' ' | sort | uniq -c | sort -rn
+#   want: >= 1 /S /H1 ; frametitle roled one level below section ;
+#         /S /TH present wherever data tables are ; /Alt on /S /Formula
+```
+⚠ When globbing for the PDF to check, **exclude handouts**: `deck-handout.pdf` sorts *before*
+`deck.pdf` (`-` < `.`), so `ls week*/deck-*.pdf | head -1` quietly hands you a stale handout —
+the "measure against a build that actually ran" trap in a new disguise. It cost a full
+false-negative round here: a change that had worked was reported as having done nothing.
+
+**Report contrast and table changes to the author.** Darkening a palette changes the look of
+every slide, and adding a header row changes what is *on* one — neither is a silent commit.
+
 ## Step 7 — Conversion report (always deliver this)
 
 End with a short report per deck:
@@ -333,6 +417,9 @@ End with a short report per deck:
 - **Manual follow-ups**: title-page wording, folded double titles, images still missing
   `alt=` (list them — this is the accessibility payload, not optional), any frame that needed
   hand-tuning.
+- **Accessibility state (Step 6b)**: whether the A-\* fixes are in, tables still unclassified,
+  and any colour change you made — a darkened palette alters the look of every slide and an
+  added header row alters what is *on* one, so both are the author's call, not yours.
 - Anything that compiled but looked wrong, for the user to judge.
 
 ---
