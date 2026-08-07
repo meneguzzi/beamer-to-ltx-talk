@@ -6,7 +6,7 @@
 
 <!-- Minimal .tex reproduction, error signature, or before/after page counts. See CONTRIBUTING.md. -->
 
-- [ ] Tested against a real deck (not just a synthetic snippet) — describe how, if so
+- [ ] Tested against a real deck (not just a synthetic snippet); describe how, if so
 - [ ] `references/compromises.md` updated, if this changes or adds detection
 - [ ] `ltx-talk` version tested against noted above
 

@@ -6,7 +6,7 @@ body:
     id: summary
     attributes:
       label: What went wrong
-      description: The symptom — a compile error, a silently wrong PDF, a bad --lint result, etc.
+      description: The symptom, e.g. a compile error, a silently wrong PDF, a bad --lint result.
     validations:
       required: true
 
@@ -40,7 +40,7 @@ body:
     id: catalogue-id
     attributes:
       label: Matching catalogue ID, if any
-      description: e.g. C-ONSLIDE-ARG — leave blank if this looks new.
+      description: e.g. C-ONSLIDE-ARG. Leave blank if this looks new.
 
   - type: checkboxes
     id: checks

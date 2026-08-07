@@ -21,5 +21,5 @@ body:
     attributes:
       label: Checklist
       options:
-        - label: This isn't a request to auto-fix \onslide/\uncover/\only overlays (see CONTRIBUTING.md — that's deliberately manual)
+        - label: This isn't a request to auto-fix \onslide/\uncover/\only overlays (see CONTRIBUTING.md; that's deliberately manual)
           required: false

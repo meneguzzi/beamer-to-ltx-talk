@@ -2,4 +2,4 @@ blank_issues_enabled: true
 contact_links:
   - name: Catalogue of known incompatibilities
     url: https://github.com/meneguzzi/beamer-to-ltx-talk/blob/main/references/compromises.md
-    about: Check here first — your issue may already be documented with a workaround.
+    about: Check here first. Your issue may already be documented with a workaround.
