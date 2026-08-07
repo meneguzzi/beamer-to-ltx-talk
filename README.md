@@ -1,6 +1,6 @@
 # beamer-to-ltx-talk
 
-A [Claude Code](https://claude.ai/code) skill that converts existing LaTeX **Beamer** slide decks to the **ltx-talk** class, producing tagged, accessible PDF (PDF/UA, PDF/A).
+An [Agent Skill](https://agentskills.io) that converts existing LaTeX **Beamer** slide decks to the **ltx-talk** class, producing tagged, accessible PDF (PDF/UA, PDF/A). Built and tested with [Claude Code](https://claude.ai/code), but the `SKILL.md` format is an open, cross-tool standard — the [client list](https://agentskills.io/clients) includes Cursor, GitHub Copilot, Gemini CLI, Codex, and dozens of others. Point any compliant agent at this repo, or just ask any coding agent with file-read and shell access to follow `SKILL.md`.
 
 The guiding principle is **faithful, minimal, scripted change**: keep body content and slide order identical, rewrite only what the class change forces, and report every compromise made.
 
@@ -38,7 +38,7 @@ tlmgr info ltx-talk | grep -E 'cat-version|installed'
 
 ## What the skill does
 
-When you give Claude Code a Beamer `.tex` file and ask to convert it, the skill:
+When you give a compatible agent a Beamer `.tex` file and ask to convert it, the skill:
 
 1. **Checks** the toolchain and surveys the deck for constructs that need attention.
 2. **Generates** an ltx-talk shared preamble from `assets/preamble-template.tex` — fill in the Identity block (author/institute) and ThemeAccent colour to match your original theme.

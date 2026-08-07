@@ -1,0 +1,53 @@
+name: Bug / new incompatibility
+description: A Beamer construct that breaks under ltx-talk, a converter bug, or a wrong/incomplete catalogue entry.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What went wrong
+      description: The symptom — a compile error, a silently wrong PDF, a bad --lint result, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: >
+        A minimal .tex snippet that reproduces the issue, if you can reduce to one. If you can't
+        reduce it, describe the construct and paste the relevant frame(s).
+      render: latex
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Compiler / tagpdf error, or observed behaviour
+      description: Paste the exact error signature from the .log, or describe what's visually wrong in the PDF.
+      render: text
+
+  - type: input
+    id: ltx-talk-version
+    attributes:
+      label: ltx-talk version
+      description: "`tlmgr info ltx-talk | grep -E 'cat-version|installed'`"
+    validations:
+      required: true
+
+  - type: input
+    id: catalogue-id
+    attributes:
+      label: Matching catalogue ID, if any
+      description: e.g. C-ONSLIDE-ARG — leave blank if this looks new.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I checked `references/compromises.md` for an existing entry matching this
+          required: true
+        - label: I ran `convert_deck.py --lint` on the file and it either missed this or isn't applicable
+          required: false

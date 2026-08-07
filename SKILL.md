@@ -365,7 +365,7 @@ still rejected by a real PDF/UA checker on four counts. Read the **A-\*** sectio
 
 | Checker complaint | Cause | Fix |
 |---|---|---|
-| "headings do not begin at level one" | ltx-talk roles `frametitle` to `H4`, and a title page has no heading at all | `role/new-tag = frametitle / H2` + tag the title as `H1` — **A-HEADINGS** |
+| "headings do not begin at level one" | ltx-talk roles `frametitle` to `H4`, and a title page has no heading at all | `role/new-tag = frametitle / H2` + point the kernel's automatic paragraph tagger at `H1` — **A-HEADINGS**, do NOT hand-write `\tagstructbegin{tag=H1}` |
 | "images without a description", pointing at *maths* | `Formula` elements get no `/Alt`; the switch is auto-on for ua-**1** only | `\tagpdfsetup{math/alt/use}` — **A-MATHALT** |
 | "tables missing headers" | every `tabular` is tagged `Table`/`TR`/`TD`, never `TH` | classify each: `table/header-rows`/`header-columns`, or `table/tagging=div` for layout grids — **A-TABLE-TH** |
 | "text with insufficient contrast" | saturated emphasis colours are <4.5:1 on white | darken the palette *and* the raw `\color{red}` sites — **A-CONTRAST** |
@@ -373,8 +373,32 @@ still rejected by a real PDF/UA checker on four counts. Read the **A-\*** sectio
 The first two are one-line preamble fixes that solve the whole course at once — **apply them
 in Step 1 and save yourself the round trip.** The last two need per-deck work.
 
-Two of these are structural rather than cosmetic, and both need judgement you cannot script:
+> ⚠ **Blackboard's checker is not the bar — PDF/UA-2 is.** It is a *simplified* checker; a
+> deck can score near-perfect on it and still fail a real PDF/UA-2 validator. `verapdf`
+> (Homebrew: `verapdf`) runs the full profile locally:
+> ```sh
+> verapdf -f ua2 --format text deck.pdf     # PASS/FAIL
+> verapdf -f ua2 --format mrr  deck.pdf     # full report, per-check
+> ```
+> Run it before calling any A-\* fix done — Blackboard passing a deck does not mean it passes
+> `ua2`. This is how the A-HEADINGS title-tagging bug below was actually found.
 
+Three of these are structural rather than cosmetic, and all three need judgement you cannot
+fully script:
+
+- **Headings.** `role/new-tag = frametitle / H2` is genuinely one line and safe. The title's
+  `H1` is not: the obvious approach, hand-writing `\tagstructbegin{tag=H1}` around the title
+  text, compiles clean and passes Blackboard but **fails PDF/UA-2** (`Hn shall not contain
+  Part`/`P`). The title-page body is typically one long LaTeX paragraph, and the kernel's
+  *automatic* per-paragraph tagger fires on the first character actually typeset — landing its
+  own `Part → P` wrapper **inside** whatever manual struct is open, regardless of it. Do not
+  try to suppress the automatic tagger with `\tagpdfsetup{para/tagging=false}` either — that
+  key is meant to be set once at `\begin{document}`, and toggling it mid-paragraph desyncs the
+  kernel's own begin/end counters (worse: a dozen new tagpdf errors, not zero). The fix is to
+  let the automatic tagger produce the `H1` itself: force the title onto its own real
+  paragraph (`\par`, not `\\`) and set `\tagpdfsetup{para/tag=H1,para/flattened}` for exactly
+  that paragraph's lifetime. See A-HEADINGS in `references/compromises.md` for the full
+  mechanism and the working code, already in `assets/preamble-template.tex`.
 - **Tables.** The classifying question is *"does a cell still make sense read aloud on its
   own, with no column name attached?"* If yes it is a layout grid — demote it with
   `table/tagging=div` and **do not invent a header row**. If no it is a data table and needs
@@ -405,6 +429,10 @@ qpdf --qdf --object-streams=disable deck.pdf qdf.pdf
 grep -aoE '/S\s*/[A-Za-z0-9]+' qdf.pdf | tr -s ' ' | sort | uniq -c | sort -rn
 #   want: >= 1 /S /H1 ; frametitle roled one level below section ;
 #         /S /TH present wherever data tables are ; /Alt on /S /Formula
+verapdf -f ua2 --format text deck.pdf
+#   the qpdf/grep check above counts elements but can't see nesting —
+#   an H1 containing a stray Part/P (the A-HEADINGS manual-struct trap)
+#   still shows ">= 1 /S /H1" and passes it. Only a real validator catches that.
 ```
 ⚠ When globbing for the PDF to check, **exclude handouts**: `deck-handout.pdf` sorts *before*
 `deck.pdf` (`-` < `.`), so `ls week*/deck-*.pdf | head -1` quietly hands you a stale handout —

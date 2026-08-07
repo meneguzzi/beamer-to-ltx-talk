@@ -284,10 +284,23 @@
     \vfill
     %% A-HEADINGS: the deck title is the document's only H1 above the section
     %% dividers, so without this the first frametitle is an orphan heading.
-    %% Tagged by hand — this is plain text in a frame, not a sectioning
-    %% command, so nothing tags it for you (\title roles to /Title -> P).
-    {\color{\ThemeAccent}\Huge\bfseries
-     \tagstructbegin{tag=H1}\tagmcbegin{}#1\tagmcend\tagstructend}\par\vspace{0.5em}
+    %% Plain text in a frame, not a sectioning command, so nothing tags it for
+    %% you (\title roles to /Title -> P) -- but do NOT reach for a manual
+    %% \tagstructbegin{tag=H1} here: the kernel's automatic per-paragraph
+    %% tagger fires on the first character actually typeset (here, the
+    %% title's first letter) regardless of how soon \par follows, and it
+    %% opens ITS OWN Part->P wrapper as a child of whatever struct is
+    %% already open -- landing Part/P inside the manual H1, which PDF/UA-2
+    %% forbids. Instead point the automatic tagger at H1 directly: force the
+    %% title onto its own real paragraph and set para/tag + para/flattened
+    %% (skips the usual outer Part wrapper) for exactly that paragraph's
+    %% lifetime -- the \begingroup/\endgroup MUST enclose the \par, or
+    %% para/begin and para/end fire with mismatched settings.
+    \begingroup
+      \tagpdfsetup{para/tag=H1,para/flattened}%
+      {\color{\ThemeAccent}\Huge\bfseries #1}\par
+    \endgroup
+    \vspace{0.5em}
     {\Large #2}\par\vspace{2.5em}
     {\large \AuthorLong}\par\vspace{0.4em}
     {\small\ttfamily \AuthorEmails}\par\vspace{0.4em}

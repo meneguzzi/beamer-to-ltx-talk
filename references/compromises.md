@@ -596,14 +596,44 @@ why they are absent from the upstream quick-start docs.
   ```latex
   \tagpdfsetup{role/new-tag = frametitle / H2}   % sits directly under the section H1
   ```
-  and make the deck title the document's `H1` by hand — it is plain text inside a frame, not
-  a sectioning command, so nothing tags it for you:
+  and make the deck title the document's `H1` — it is plain text inside a frame, not a
+  sectioning command, so nothing tags it for you. **Do not reach for a manual struct here:**
   ```latex
-  {\Huge\bfseries \tagstructbegin{tag=H1}\tagmcbegin{}#1\tagmcend\tagstructend}
+  {\Huge\bfseries \tagstructbegin{tag=H1}\tagmcbegin{}#1\tagmcend\tagstructend}   % WRONG
   ```
-  Verified on a 20-deck course: no visual change, page counts unchanged, 0 tagpdf errors.
+  This compiles clean, `check-ltx.sh` is green, the `H1` is *present* — and it still fails a
+  real PDF/UA-2 checker (veraPDF; Blackboard's simplified checker does not catch it):
+  `<Hn> shall not contain <Part>` / `<Hn> shall not contain <P>`. The title-page body is one
+  LaTeX paragraph (the `\\`s are line breaks, not `\par`s), and the kernel's *automatic*
+  per-paragraph tagger fires on the first character actually typeset — the title's first
+  letter, which sits **inside** the manual struct. The automatic tagger doesn't check what's
+  already open; it wraps its own `Part → P` as a child of whatever struct is current, landing
+  it inside the hand-written `H1`. Same trap family as C-CENTER-ARG: a declaration with
+  paragraph-scale side effects, colliding with something written locally. Reaching for
+  `\tagpdfsetup{para/tagging=false}` to suppress the automatic tagger makes it **worse** —
+  that key is meant to be set once at `\begin{document}` (`documentmetadata-support.ltx:357`),
+  and toggling it mid-paragraph desyncs the kernel's own begin/end counters (12 new tagpdf
+  errors on a course this was tried on, dwarfing the original 2-clause failure).
+
+  **Correct fix — let the automatic tagger do the job instead of fighting it:**
+  ```latex
+  \begingroup
+    \tagpdfsetup{para/tag=H1,para/flattened}%
+    {\Huge\bfseries #1\par}%
+  \endgroup
+  ```
+  Force the title onto its own real paragraph (`\par`, not `\\`), then point the kernel's own
+  per-paragraph machinery at it with the two keys built for exactly this (`latex.ltx`,
+  `\NewTaggingSocketPlug{para/semantic/begin}`/`{para/textblock/begin}`): `para/tag` sets what
+  tag the automatic tagger uses instead of its default `P`; `para/flattened` skips the outer
+  `Part` wrapper it would otherwise add. One clean `H1`, produced by the mechanism that was
+  always going to fire — no manual struct, nothing to keep balanced by hand. Verified on a
+  20-deck course: title page renders pixel-identical, page counts unchanged, `check-ltx.sh`
+  green, and the `Hn-Part`/`Hn-P` veraPDF failures are gone.
 - **Check:** `grep -aoE '/S\s*/H[0-9]' qdf.pdf | sort | uniq -c` — there must be ≥1 `H1`, and
-  `frametitle` must role to exactly one level below the section.
+  `frametitle` must role to exactly one level below the section. That check alone is not
+  enough to catch this specific trap — run `verapdf -f ua2 deck.pdf` (PDF/UA-2; Blackboard's
+  checker does not catch it) to confirm the `H1` doesn't contain `Part`/`P`.
 - **Revisit when:** ltx-talk makes the frametitle level configurable, or roles it relative to
   the sectioning depth actually in use.
 

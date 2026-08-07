@@ -1,0 +1,25 @@
+name: Feature / improvement request
+description: Something the skill, scripts, or catalogue should do that they don't yet.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's missing or awkward
+      description: What are you trying to do, and where does the current skill fall short?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What would you want the skill/script/catalogue to do instead?
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: This isn't a request to auto-fix \onslide/\uncover/\only overlays (see CONTRIBUTING.md — that's deliberately manual)
+          required: false
