@@ -48,7 +48,13 @@ def main():
     items = json.load(open(a.worklist, encoding='utf-8'))
     by_deck = defaultdict(list)
     skipped = 0
+    manual = 0
     for it in items:
+        # A-TIKZ-ALT entries have no optional argument to rewrite: a tikzpicture has to be
+        # WRAPPED in altfigure, which is a structural edit, not an attribute injection.
+        if it.get('kind') == 'untagged_figure':
+            manual += 1
+            continue
         if not it.get('alt', '').strip():
             skipped += 1
             continue
@@ -88,6 +94,9 @@ def main():
 
     print(f'\n{total} \\includegraphics updated; {skipped} still without alt text.',
           file=sys.stderr)
+    if manual:
+        print(f'{manual} untagged figure(s) skipped - wrap these in altfigure by hand '
+              '(A-TIKZ-ALT).', file=sys.stderr)
     if skipped:
         print('Fill the remaining "alt" fields and re-run (safe: it is idempotent).',
               file=sys.stderr)

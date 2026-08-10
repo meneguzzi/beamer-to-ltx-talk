@@ -575,10 +575,12 @@ why they are absent from the upstream quick-start docs.
 
 # A-* — accessibility-checker findings (compile clean, tag clean, still fail)
 
-> These four are a **different class** from everything above. The deck compiles, `pdfinfo`
+> These five are a **different class** from everything above. The deck compiles, `pdfinfo`
 > says `Tagged: yes`, the log has zero tagpdf errors — and a PDF/UA checker still rejects it.
-> `Tagged: yes` means *a tag tree exists*, not that it is correct. Found by running a real
-> checker over a course that had passed every gate in this skill.
+> `Tagged: yes` means *a tag tree exists*, not that it is correct. The first four were found
+> by running a real checker over a course that had passed every gate in this skill.
+> **A-TIKZ-ALT is worse:** no checker reported it either, because the affected figures are
+> absent from the tag tree rather than wrong within it.
 >
 > **Do a checker pass before declaring a conversion done** (SKILL.md Step 6b).
 
@@ -766,6 +768,51 @@ why they are absent from the upstream quick-start docs.
 
 ---
 
+## A-TIKZ-ALT — figures that are not `\includegraphics` are silently untagged  ⚠ invisible to every alt-text tool
+
+- **Symptom:** none. No warning, no checker complaint naming that figure, and it never
+  appears in an alt-text audit, because every alt tool in this skill matches
+  `\includegraphics`. A screen reader encounters nothing where the diagram is.
+- **Affects:** `tikzpicture`, `pgfplots` `axis`, and `\input{…}` of a generated figure
+  (xfig `.pdf_t`, `.pspdftex`, `.pgf`). On one 20-deck course this was **23 figures across
+  5 decks** that no gate could see, against zero missing `alt=` on `\includegraphics`.
+- **Why it is worse than a missing `alt=`:** tagpdf *warns* for a bare `\includegraphics`,
+  then falsely satisfies validators by using the filename as `/Alt` (see `alt-text.md`).
+  A `tikzpicture` produces no warning and no `/Alt` at all, so there is nothing to grep for
+  in the log and nothing to find in the PDF.
+- **The nastiest variant is the inputted figure.** An xfig `.pdf_t` is an
+  `\includegraphics{…}` wrapped in a LaTeX `picture` overlay, living in a *separate file*.
+  A linter that greps deck sources never sees that `\includegraphics`, so the figure is
+  absent from the alt-text debt rather than listed as missing. Do not "fix" it by editing the
+  `.pdf_t`, which is a generated artefact that xfig will overwrite. Wrap at the call site.
+- **Workaround:** an `altfigure` environment in the shared preamble, wrapping anything that
+  draws and is not an `\includegraphics`:
+  ```latex
+  \newenvironment{altfigure}[1]
+    {\tagstructbegin{tag=Figure,alt={#1}}\tagmcbegin{}}
+    {\tagmcend\tagstructend}
+  ```
+  ```latex
+  \begin{altfigure}{A square joined to a circle by an arrow.}
+  \begin{tikzpicture} … \end{tikzpicture}
+  \end{altfigure}
+  ```
+  An **environment, not a two-argument command**: TikZ bodies are long, and brace-matching a
+  whole picture as a macro argument is fragile.
+- **Beamer side:** add `\newenvironment{altfigure}[1]{}{}` to the Beamer preamble in the same
+  change, or the deck stops compiling as Beamer. It is inert there, like every other
+  preserved tagging declaration.
+- **Verified** by wrapping 19 real figures (2 `.pdf_t`, 17 `pgfplots`) across three decks:
+  page counts **identical** to baseline (79/89/86), 0 tagpdf errors, `/S /Figure` carrying a
+  real `/Alt` on every one. It adds no vertical space and disturbs no overlay.
+- **Expect one oddity:** inside a `.pdf_t`, the inner LaTeX `picture` environment picks up its
+  own auto `/Alt` of `"picture environment"`, nested inside your `Figure`. Harmless, but the
+  tag tree for those figures is a level deeper than the others.
+- **Check:** `alt_text_audit.py` reports these as `untagged_figure` findings. They cannot be
+  auto-fixed the way an optional argument can, so they belong on the manual worklist.
+
+---
+
 ## Quick error → cause map
 
 > ⚠ **The worst failures in this catalogue produce NO error at the offending line.**
@@ -778,14 +825,15 @@ why they are absent from the upstream quick-start docs.
 > | `\center{…}` used as a command | tag tree corrupts; error lands **far away**, or in another frame | C-CENTER-ARG |
 > | `\includegraphics` without `alt=` | screen reader reads out **the filename** | see `alt-text.md` |
 >
-> And four more that survive *every* check in this skill — clean compile, `Tagged: yes`,
-> 0 tagpdf errors — and are only caught by an actual PDF/UA checker:
+> And five more that survive *every* check in this skill — clean compile, `Tagged: yes`,
+> 0 tagpdf errors — and are only caught by an actual PDF/UA checker, or by nobody at all:
 > | Silent failure | Symptom | Entry |
 > |---|---|---|
 > | frame titles roled `H4` by the class | "headings do not begin at level one" | A-HEADINGS |
 > | `Formula` elements with no `/Alt` | "images without a description", pointing at maths | A-MATHALT |
 > | every `tabular` is a `Table` with no `TH` | "tables missing headers", including layout grids | A-TABLE-TH |
 > | saturated emphasis colours | "text with insufficient contrast" | A-CONTRAST |
+> | `tikzpicture` / `\input{…pdf_t}` figures | **no symptom at all** — absent from the reading order and from every audit | A-TIKZ-ALT |
 >
 > Three of these are invisible to `pdftotext` as well as to the compiler: hidden overlay
 > content stays in the PDF text layer. **Render the page** (`pdftoppm -f N -l N -png`) to

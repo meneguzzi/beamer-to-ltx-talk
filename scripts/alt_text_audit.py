@@ -16,6 +16,13 @@ the image so the agent can actually LOOK at it:
 Both are required. Context alone yields useless alt text ("a search tree"); the image
 alone misses the argument it is making. See references/alt-text.md.
 
+It also reports a SECOND kind of finding: figures that are not \\includegraphics at all
+(tikzpicture, pgfplots, \\input of a generated .pdf_t) and are not wrapped in an
+altfigure environment. Those are absent from the tag tree entirely, produce no warning,
+and no checker reports them — see A-TIKZ-ALT in references/compromises.md. They cannot
+be auto-fixed by alt_text_apply.py, because there is no optional argument to rewrite;
+they go on the manual worklist and are wrapped by hand.
+
 Usage:
     alt_text_audit.py DECK.tex [DECK2.tex ...] [--render-dir DIR] [--json OUT.json]
                       [--no-render]
@@ -36,6 +43,14 @@ FRAMEBEGIN_RE = re.compile(r'\\begin\{frame\*?\}')
 FRAMEEND_RE = re.compile(r'\\end\{frame\*?\}')
 FRAMETITLE_RE = re.compile(r'\\frametitle\{(.+)\}\s*$')
 IMG_EXTS = ('', '.pdf', '.png', '.jpg', '.jpeg', '.eps')
+
+# A-TIKZ-ALT: figures that are not \includegraphics. tikzpicture is the outermost
+# environment for pgfplots too, so matching `axis` as well would double-count.
+DRAWN_RE = re.compile(r'\\begin\{tikzpicture\}')
+# \input of a generated figure: xfig .pdf_t, .pspdftex, .pgf, or anything under images/.
+INPUTFIG_RE = re.compile(r'\\input\s*\{([^}]*(?:\.pdf_t|\.pspdftex|\.pgf|images/[^}]*))\}')
+ALTFIG_BEGIN_RE = re.compile(r'\\begin\{altfigure\}')
+ALTFIG_END_RE = re.compile(r'\\end\{altfigure\}')
 
 # LaTeX noise to strip when harvesting prose context
 STRIP_RE = re.compile(r'\\(begin|end)\{[^}]*\}|\\(item|centering|vspace|hspace|only|onslide|'
@@ -96,7 +111,41 @@ def audit(deck: str, render_dir: str, do_render: bool):
                 title_of[j] = title
             start = None
 
+    # A-TIKZ-ALT pass: drawn figures and inputted figures not wrapped in altfigure.
+    # Depth is tracked across lines because an altfigure spans a whole tikzpicture.
     out = []
+    depth = 0
+    for i, l in enumerate(lines):
+        if l.lstrip().startswith('%'):
+            continue
+        depth += len(ALTFIG_BEGIN_RE.findall(l))
+        hits = [('tikzpicture', m.group(0)) for m in DRAWN_RE.finditer(l)]
+        hits += [('input', m.group(1)) for m in INPUTFIG_RE.finditer(l)]
+        for kind, what in hits:
+            if depth > 0:
+                continue                                   # already wrapped
+            fs, fe = frame_of.get(i, (max(0, i - 8), min(len(lines), i + 8)))
+            prose = [c for c in (clean(lines[j]) for j in range(fs, fe + 1)
+                                 if j != i and not lines[j].lstrip().startswith('%'))
+                     if len(c) > 3]
+            out.append({
+                'deck': deck,
+                'line': i + 1,
+                'kind': 'untagged_figure',
+                'figure_kind': kind,
+                'image': what,
+                'resolved': None,
+                # No preview: the figure only exists once TeX has drawn it. Look at the
+                # corresponding page of the BUILT PDF instead.
+                'preview_png': None,
+                'preview_hint': 'view this frame in the built PDF; the figure has no source image',
+                'frametitle': title_of.get(i, ''),
+                'context': prose[:12],
+                'alt': ''      # <-- agent fills this, then wraps the figure BY HAND
+            })
+        depth -= len(ALTFIG_END_RE.findall(l))
+        depth = max(depth, 0)
+
     for i, l in enumerate(lines):
         if l.lstrip().startswith('%'):
             continue
@@ -123,6 +172,7 @@ def audit(deck: str, render_dir: str, do_render: bool):
             out.append({
                 'deck': deck,
                 'line': i + 1,
+                'kind': 'includegraphics',
                 'image': path,
                 'resolved': src,
                 'preview_png': png,
@@ -150,13 +200,28 @@ def main():
     with open(a.json, 'w', encoding='utf-8') as f:
         json.dump(items, f, indent=2, ensure_ascii=False)
 
-    print(f'{len(items)} image(s) missing alt text -> {a.json}', file=sys.stderr)
-    for it in items:
+    imgs = [i for i in items if i.get('kind') != 'untagged_figure']
+    figs = [i for i in items if i.get('kind') == 'untagged_figure']
+
+    print(f'{len(imgs)} image(s) missing alt text, '
+          f'{len(figs)} untagged figure(s) -> {a.json}', file=sys.stderr)
+    for it in imgs:
         flag = '' if it['preview_png'] else '  [NO PREVIEW - resolve/render failed]'
         print(f"  {it['deck']}:{it['line']}  {it['image']}{flag}", file=sys.stderr)
         print(f"      frame: {it['frametitle']}", file=sys.stderr)
+
+    if figs:
+        print('\nUNTAGGED FIGURES (A-TIKZ-ALT) — absent from the tag tree, not merely '
+              'missing alt=.\nThese cannot be auto-applied; wrap each in altfigure by hand:',
+              file=sys.stderr)
+        for it in figs:
+            print(f"  {it['deck']}:{it['line']}  [{it['figure_kind']}] {it['image']}",
+                  file=sys.stderr)
+            print(f"      frame: {it['frametitle']}", file=sys.stderr)
+
     print('\nNext: VIEW each preview_png, read its context, fill "alt", '
-          'then run alt_text_apply.py.', file=sys.stderr)
+          'then run alt_text_apply.py (which skips untagged_figure entries).',
+          file=sys.stderr)
 
 
 if __name__ == '__main__':

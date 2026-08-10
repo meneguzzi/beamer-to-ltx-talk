@@ -60,16 +60,20 @@ Most are not in the upstream docs because they only surface under *tagging*
 >    leaks an unclosed paragraph and the error is reported **nowhere near** the offending line
 >    (C-CENTER-ARG). Cost a full day of bisection. Use `\begin{center}…\end{center}`.
 > 5. **Images without `alt=`** → a screen reader reads out *the filename*.
+> 6. **`tikzpicture` / `pgfplots` / `\input{…pdf_t}` figures** → untagged entirely, with **no
+>    warning, no `/Alt`, and no checker complaint** (A-TIKZ-ALT). Wrap each in `altfigure`.
 >
 > Also: **measure against a build that actually ran.** Beamer + `\DocumentMetadata` is fatal,
 > so a half-migrated repo can leave stale PDFs lying around, and `pdfinfo` will happily read
 > them and give you a confident, wrong baseline.
 >
-> And: **`Tagged: yes` is not a pass.** It says a tag tree exists, not that it is right. Four
+> And: **`Tagged: yes` is not a pass.** It says a tag tree exists, not that it is right. Five
 > further failures survive a clean compile, `Tagged: yes`, 0 tagpdf errors *and* complete alt
-> text, and only a real PDF/UA checker finds them — orphan `H4` frame titles, `Formula`
-> elements with no `/Alt`, `tabular`s with no `TH`, and sub-4.5:1 emphasis colours. Two are
-> one-line preamble fixes: **put them in at Step 1** (A-HEADINGS, A-MATHALT). See Step 6b.
+> text — orphan `H4` frame titles, `Formula` elements with no `/Alt`, `tabular`s with no `TH`,
+> sub-4.5:1 emphasis colours, and untagged `tikzpicture`/inputted figures. Only a real PDF/UA
+> checker finds the first four; **nothing at all finds the fifth**, because those figures are
+> missing from the tag tree rather than wrong inside it. Two are one-line preamble fixes:
+> **put them in at Step 1** (A-HEADINGS, A-MATHALT). See Step 6b.
 >
 > And **verify overlays by rendering pages, never with `pdftotext`** — hidden overlay content
 > stays in the PDF text layer, so extraction reports text that is invisible on the slide.
@@ -112,6 +116,7 @@ Most are not in the upstream docs because they only surface under *tagging*
    grep -cE 'containsverbatim|lstlisting|verbatim'        deck.tex     # frame* needed
    grep -cE '\\includemedia|\\movie|\\animategraphics'    deck.tex     # media risk
    grep -cE '\\includegraphics(\[[^]]*\])?\{' deck.tex; grep -c 'alt=' deck.tex  # alt-text gap
+   grep -cE '\\begin\{tikzpicture\}|\\input\{[^}]*(pdf_t|images/)' deck.tex      # A-TIKZ-ALT
    ```
    Report the blast radius to the user before mass-editing, and confirm the scope (one deck,
    or all — pilot one first if a course).
@@ -346,6 +351,13 @@ python3 scripts/alt_text_apply.py alt.json
 grep -c 'Alternative text for graphic is missing' deck.log     # -> 0
 ```
 
+The audit reports a second finding type, `untagged_figure`: `tikzpicture`, `pgfplots` and
+`\input{…pdf_t}` figures that are absent from the tag tree altogether (**A-TIKZ-ALT**). Step 4
+proves nothing about them — the warning it counts only ever fires for `\includegraphics`, so a
+deck full of undescribed plots reports `0`. They have no `preview_png` either, because the
+figure does not exist until TeX draws it; read the built PDF page instead. `alt_text_apply.py`
+skips them by design: wrapping in `altfigure` is a structural edit, done by hand.
+
 You need **both inputs**. The rendered image gives the figure's *content* (node labels, axis
 labels); the LaTeX context gives its *role in the argument*. Context alone yields "a search
 tree"; the image alone misses why the slide shows it. **Never write alt text from the
@@ -369,6 +381,7 @@ still rejected by a real PDF/UA checker on four counts. Read the **A-\*** sectio
 | "images without a description", pointing at *maths* | `Formula` elements get no `/Alt`; the switch is auto-on for ua-**1** only | `\tagpdfsetup{math/alt/use}` — **A-MATHALT** |
 | "tables missing headers" | every `tabular` is tagged `Table`/`TR`/`TD`, never `TH` | classify each: `table/header-rows`/`header-columns`, or `table/tagging=div` for layout grids — **A-TABLE-TH** |
 | "text with insufficient contrast" | saturated emphasis colours are <4.5:1 on white | darken the palette *and* the raw `\color{red}` sites — **A-CONTRAST** |
+| *(no complaint at all)* | `tikzpicture`/`pgfplots`/`\input{…pdf_t}` figures are absent from the tag tree, so there is nothing for a checker to object to | wrap each in `altfigure` — **A-TIKZ-ALT**, found by `alt_text_audit.py`, not by a checker |
 
 The first two are one-line preamble fixes that solve the whole course at once — **apply them
 in Step 1 and save yourself the round trip.** The last two need per-deck work.
