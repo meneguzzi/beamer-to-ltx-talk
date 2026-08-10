@@ -50,7 +50,7 @@ When you give a compatible agent a Beamer `.tex` file and ask to convert it, the
    - Rewrites title pages and verbatim frames
 4. **Lints** with `convert_deck.py --lint` *before* compiling. See below.
 5. **Compiles** and triages errors against the known-incompatibilities catalogue.
-6. **Delivers** a conversion report listing the ltx-talk version targeted, page-count comparison, every compromise made, and outstanding manual follow-ups (especially missing alt text on images).
+6. **Delivers** a conversion report listing the ltx-talk version targeted, page-count comparison, every compromise made, and outstanding manual follow-ups (especially missing alt text on images and untagged `tikzpicture`/`pgfplots` figures).
 
 ### Lint before you build
 
@@ -76,8 +76,10 @@ references/
 scripts/
   convert_deck.py         # Idempotent source transformer; also `--lint` (pre-build check)
   fix_frame_titles.py     # Second pass: brace-matched titles convert_deck.py can't see
-  alt_text_audit.py       # Lists \includegraphics missing alt= text
-  alt_text_apply.py       # Writes alt= text back into the source
+  alt_text_audit.py       # Lists \includegraphics missing alt= text, plus tikzpicture/
+                          # pgfplots/inputted figures untagged entirely (A-TIKZ-ALT)
+  alt_text_apply.py       # Writes alt= text back into the source; skips A-TIKZ-ALT findings,
+                          # which need a structural altfigure wrap done by hand
   table_audit.py          # Classifies every tabular: data table (needs TH) vs
                           # layout grid (needs table/tagging=div), see A-TABLE-TH
 
@@ -174,6 +176,7 @@ The catalogue is verified across **ltx-talk 0.5.0-0.5.2** (each entry in `compro
 The whole point of this conversion is tagged, accessible PDF. Things to check after conversion:
 
 - **Alt text**: `tagpdf` warns for every `\includegraphics` without `alt={…}`. Surface the list and fill it; this is the main accessibility payload.
+- **Non-`\includegraphics` figures**: a `tikzpicture`, a `pgfplots` `axis`, or an `\input{…}` of a generated `.pdf_t`/`.pgf` produces no warning at all and lands with no `/Alt` and no `Figure` tag (**A-TIKZ-ALT**). `alt_text_audit.py` finds these as `untagged_figure`; wrap each in an `altfigure` environment by hand, since there is no attribute to inject.
 - **Reading order in columns**: content is tagged in source order (left column first, then right). Write columns so left-first is the correct reading order. For paired-row content, use `tabular` instead.
 - **Block titles**: the `title=` argument of `block`/`alertblock`/`exampleblock` is tagged as plain text, not as a heading. For semantically important labels, use `\subsubsection*{}` inside the box body.
 - **Verify tagging**: `pdfinfo deck.pdf | grep Tagged` should return `yes`; `grep 'tagpdf Error' deck.log` should return 0 matches.

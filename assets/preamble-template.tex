@@ -226,6 +226,19 @@
 %% and \equal cannot cope with a nested \Call in #2. Always emit parentheses.
 \algrenewcommand\Call[2]{\textproc{#1}(#2)}
 
+%% A-TIKZ-ALT: a tikzpicture, a pgfplots axis, or an \input of a generated figure
+%% (xfig .pdf_t, .pspdftex, .pgf) produces NO warning and lands with no /Alt and
+%% no Figure tag at all -- it is missing from the tag tree, not merely undescribed.
+%% Wrap each one at the call site: \begin{altfigure}{<description>} ... \end{altfigure}.
+%% An environment, not a two-argument command, because TikZ bodies are long and
+%% brace-matching a whole picture as a macro argument is fragile.
+%% Keep this definition in sync everywhere a deck might see it: if a deck still
+%% dual-compiles under plain Beamer, its preamble needs the same environment name
+%% as a no-op (\newenvironment{altfigure}[1]{}{}), or it stops compiling there.
+\newenvironment{altfigure}[1]
+  {\tagstructbegin{tag=Figure,alt={#1}}\tagmcbegin{}}
+  {\tagmcend\tagstructend}
+
 %% C-OLDFONT: ltx-talk does not define the obsolete two-letter font commands,
 %% and decks use them inside maths too, where a text-shape switch is illegal.
 \providecommand{\sc}{\ifmmode\else\scshape\fi}
