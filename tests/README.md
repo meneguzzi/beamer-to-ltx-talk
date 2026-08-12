@@ -8,7 +8,7 @@ tracked and browsable in the repo itself.
 
 ## Layout
 
-```
+```text
 tests/fixtures/<ID>/
   before.tex   # minimal Beamer source that hits the problem
   after.tex    # the same content converted, workaround applied
@@ -28,7 +28,16 @@ with no catalogue entry yet, the GitHub issue number (`ISSUE-2`).
   the catalogue entry.
 - Neither file needs a full preamble/theme — borrow the minimum from
   `../assets/preamble-template.tex`, not the whole thing.
-- These are **not** run by CI (`ci.yml`'s syntax-check job has no TeX Live), and there is no
-  test-runner script yet. For now they're a manual/local check: `cd` into a fixture's
-  directory and build both files by hand when touching the matching catalogue entry or
-  reviewing a PR that claims to fix it.
+
+## Running them
+
+`.github/workflows/ci.yml`'s `latex-fixtures` job runs `run_fixtures.sh` on every push/PR,
+inside the `texlive/texlive:latest` container (Ubuntu's own `texlive` packages are too old to
+have `ltx-talk`). It compiles every `before.tex`/`after.tex`, and additionally checks
+`after.tex`'s PDF reports `Tagged: yes`.
+
+Locally, with a TeX Live that has `ltx-talk` installed:
+
+```sh
+bash tests/run_fixtures.sh
+```

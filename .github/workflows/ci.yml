@@ -1,9 +1,11 @@
 name: CI
 
-# Sanity checks that don't need a LaTeX/ltx-talk toolchain: the scripts must
-# at least parse cleanly. Full deck-conversion testing needs TeX Live +
-# ltx-talk and a real Beamer fixture, so it stays a manual pre-release step
-# (see SKILL.md), not something CI can reasonably run on every push.
+# Two jobs: syntax-check needs no LaTeX toolchain (scripts must at least parse
+# cleanly); latex-fixtures compiles the minimal worked examples in
+# tests/fixtures/ against a real TeX Live + ltx-talk. Testing a whole real
+# course of decks is still a manual pre-release step (see SKILL.md) -- too
+# heavy for every push -- but the small per-construct fixtures are cheap
+# enough to run here.
 on:
   push:
     branches: [main]
@@ -45,3 +47,26 @@ jobs:
             echo "expected --lint to flag the synthetic fixture, but it passed clean" >&2
             exit 1
           fi
+
+  latex-fixtures:
+    runs-on: ubuntu-latest
+    # Ubuntu's own texlive packages are years behind and don't have ltx-talk
+    # (needs a recent LaTeX kernel). Run inside the official TeX Live
+    # container instead, which tracks current TeX Live / CTAN.
+    container:
+      image: texlive/texlive:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain versions
+        run: |
+          pdflatex --version | head -1
+          kpsewhich ltx-talk.cls || (echo "::error::ltx-talk.cls not found - TeX Live image is too old"; exit 1)
+
+      # poppler-utils provides pdfinfo, which run_fixtures.sh uses to check
+      # the Tagged flag on after.tex. The texlive/texlive image doesn't ship it.
+      - name: Install poppler-utils
+        run: apt-get update && apt-get install -y poppler-utils
+
+      - name: Compile MWE fixtures (tests/fixtures/*/{before,after}.tex)
+        run: bash tests/run_fixtures.sh
