@@ -135,6 +135,44 @@
 \newcommand{\pdfpcnote}[1]{}
 \newcommand{\note}[2][]{}    %% beamer \note[item]{text} / \note{text}
 
+%% ---------------------------------------------------------------------------
+%% alertblock / exampleblock — beamer's coloured highlight boxes.
+%%
+%% UNLIKE columns/column/block below, these are NOT native in ltx-talk 0.5.3
+%% (only `block' is — see C-NATIVE-ENVS). ltx-talk has no built-in
+%% alertblock/exampleblock at all, so this stub stays ACTIVE. See C-ALERTBLOCK.
+%%
+%% \begin{alertblock}{Title}...\end{alertblock} — mandatory brace argument,
+%% same call syntax as beamer's own. Do NOT try to preserve beamer's optional
+%% overlay spec (`\begin{alertblock}<2->{Title}`) with a d<>m/s<>m wrapper that
+%% forwards the title as `[{#2}]` — tcolorbox parses `[...]` as its key=value
+%% OPTIONS argument, not a positional title, so the box title silently becomes
+%% the literal character `[`. If a deck needs the overlay behaviour, wrap the
+%% whole environment in `\onslide<2->{\begin{alertblock}{Title}...}` instead of
+%% inventing a `<>`-swallowing wrapper.
+%%
+%% Accessibility note: the box title (first argument) is tagged as plain text,
+%% not as a heading; screen readers see it as body text. If semantic structure
+%% matters, use a \subsubsection* inside the box body instead. The coloured
+%% border is drawn by tcolorbox's standard (non-TikZ) skin and is automatically
+%% marked as an Artifact by the LaTeX tagging kernel — it does not pollute the
+%% reading order.
+%%
+%% We load tcolorbox WITHOUT [most]: the skins/TikZ libraries in [most] produce
+%% untagged graphics that can break the PDF tag tree under \DocumentMetadata.
+\usepackage{tcolorbox}
+
+\newtcolorbox{alertblock}[1]{
+  title={#1}, fonttitle=\bfseries,
+  colback=red!8!white, colframe=red!70!black,
+  left=4pt, right=4pt, top=2pt, bottom=2pt,
+}
+\newtcolorbox{exampleblock}[1]{
+  title={#1}, fonttitle=\bfseries,
+  colback=cadmiumgreen!8!white, colframe=cadmiumgreen,
+  left=4pt, right=4pt, top=2pt, bottom=2pt,
+}
+
 %% ###########################################################################
 %% ##  STOP.  DO NOT USE THE STUBS BELOW WITH ltx-talk.                     ##
 %% ##                                                                        ##
@@ -171,32 +209,12 @@
 \newenvironment{column}[2][t]{\begin{minipage}[#1]{#2}\ignorespaces}%
                               {\end{minipage}\hfill\ignorespaces}
 
-%% Coloured highlight boxes — beamer's block / alertblock / exampleblock.
-%%
-%% Accessibility note: the box title (first argument) is tagged as plain text,
-%% not as a heading; screen readers see it as body text. If semantic structure
-%% matters, use a \subsubsection* inside the box body instead. The coloured
-%% border is drawn by tcolorbox's standard (non-TikZ) skin and is automatically
-%% marked as an Artifact by the LaTeX tagging kernel — it does not pollute the
-%% reading order.
-%%
-%% We load tcolorbox WITHOUT [most]: the skins/TikZ libraries in [most] produce
-%% untagged graphics that can break the PDF tag tree under \DocumentMetadata.
-\usepackage{tcolorbox}
-
+%% block — beamer's plain highlight box. NATIVE in ltx-talk; this stub is only
+%% for a plain kernel-class setting. See the alertblock/exampleblock stub
+%% ABOVE this disabled section for the two boxes that DO still need defining.
 \newtcolorbox{block}[1]{
   title={#1}, fonttitle=\bfseries,
   colback=aliceblue, colframe=\ThemeAccent,
-  left=4pt, right=4pt, top=2pt, bottom=2pt,
-}
-\newtcolorbox{alertblock}[1]{
-  title={#1}, fonttitle=\bfseries,
-  colback=red!8!white, colframe=red!70!black,
-  left=4pt, right=4pt, top=2pt, bottom=2pt,
-}
-\newtcolorbox{exampleblock}[1]{
-  title={#1}, fonttitle=\bfseries,
-  colback=cadmiumgreen!8!white, colframe=cadmiumgreen,
   left=4pt, right=4pt, top=2pt, bottom=2pt,
 }
 

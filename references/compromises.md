@@ -524,6 +524,44 @@ why they are absent from the upstream quick-start docs.
 - **Workaround:** use the native environments; **do not copy those stubs in**. The template's
   stub block is only for a kernel-class setting where they genuinely don't exist.
 - **Revisit when:** the template is fixed.
+- **Don't over-generalise this to `alertblock`/`exampleblock`** — those are *not* native
+  (nothing to clash with), and still need defining. See **C-ALERTBLOCK**.
+
+## C-ALERTBLOCK — `alertblock`/`exampleblock` are NOT native, unlike `block`
+
+- **Symptom:** `LaTeX Error: Environment alertblock undefined` (or `exampleblock`) — or,
+  worse, a box that compiles clean but shows a lone `[` as its title with the intended text
+  leaking into the body.
+- **Cause:** it's easy to over-generalise C-NATIVE-ENVS above: ltx-talk 0.5.3 provides
+  `block` natively, but has **no** native `alertblock`/`exampleblock` at all (nothing to
+  clash with, nothing to fall back on). A model or contributor who reads "don't paste in the
+  block stub, it's native" can reasonably (but wrongly) conclude the same about
+  alertblock/exampleblock, find nothing else in the skill telling it what to do with them,
+  and improvise. One observed improvisation: preserve beamer's `\begin{alertblock}<2->{Title}`
+  call signature with an xparse `d<>m` wrapper that forwards the title into the new
+  environment as `[{#2}]` —
+  ```latex
+  \NewDocumentEnvironment{alertblock}{d<>m}{\begin{ltxalertblock}[{#2}]}{\end{ltxalertblock}}
+  ```
+  `[...]` is tcolorbox's **key=value options** argument, not a positional slot — passing a
+  bare braced title there is a category error. It doesn't raise a compile error; tcolorbox
+  just doesn't find a title key, so the title area renders the literal `[` and the actual
+  title text spills into the box body as ordinary text.
+- **Workaround:** define `alertblock`/`exampleblock` with tcolorbox, called with a plain
+  **mandatory** brace argument — same as beamer's own call syntax minus the overlay spec:
+  ```latex
+  \newtcolorbox{alertblock}[1]{title={#1}, fonttitle=\bfseries,
+    colback=red!8!white, colframe=red!70!black, left=4pt, right=4pt, top=2pt, bottom=2pt}
+  \newtcolorbox{exampleblock}[1]{title={#1}, fonttitle=\bfseries,
+    colback=cadmiumgreen!8!white, colframe=cadmiumgreen, left=4pt, right=4pt, top=2pt, bottom=2pt}
+  ```
+  (Shipped active in `assets/preamble-template.tex`, outside the disabled C-NATIVE-ENVS
+  stub block — only `block`/`columns`/`column` moved inside that `\iffalse`.) If a deck's
+  `\begin{alertblock}<2->{Title}` genuinely needs the overlay, don't reinvent the environment
+  signature to swallow `<...>` — wrap the whole box instead:
+  `\onslide<2->{\begin{alertblock}{Title}...\end{alertblock}}`.
+- **Revisit when:** ltx-talk grows native `alertblock`/`exampleblock` (tracked alongside the
+  same issues as C-IMMATURE's block/theorem status).
 
 ## C-THEOREM — no theorem environments
 

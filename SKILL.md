@@ -149,6 +149,14 @@ needed, and any Beamer-internal patch files.
 of them **natively** — the stubs clash (C-NATIVE-ENVS). They are in the template only for a
 kernel-class setting where they genuinely don't exist.
 
+`alertblock`/`exampleblock` are the opposite case: ltx-talk has **no native version of
+either**, so the template's tcolorbox stub for them stays active (not inside that `\iffalse`).
+Call them with a plain mandatory brace argument, `\begin{alertblock}{Title}…`, same as beamer.
+Do not invent a `d<>m`-style wrapper to preserve beamer's optional overlay spec — that's how
+`[{#2}]` gets passed to tcolorbox's *options* argument instead of the title, and the title
+silently renders as a literal `[` (**C-ALERTBLOCK**). Wrap the whole box in `\onslide<n->{…}`
+instead if the overlay is genuinely needed.
+
 Also add, up front, the things every real deck turns out to need (all catalogued):
 the `frame*` tagging hooks (**C-FRAMESTAR-TAG** — without these, listings destroy the tag
 tree), the nesting-safe `\Call` (**C-CALL-NEST**), tcolorbox theorem environments

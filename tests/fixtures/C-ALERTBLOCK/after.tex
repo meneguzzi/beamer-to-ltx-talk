@@ -1,0 +1,32 @@
+% Converted, ltx-talk. C-ALERTBLOCK workaround applied: alertblock/exampleblock
+% defined via tcolorbox with a plain MANDATORY brace argument -- NOT the
+% d<>m + [{#2}] wrapper that silently renders the title as a literal "[".
+% Verified 2026-08-12 against ltx-talk 0.5.3 / TeX Live 2026: clean compile,
+% both titles render correctly (see compromises.md C-ALERTBLOCK).
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard=a-4, tagging=on}
+\documentclass{ltx-talk}
+
+\usepackage{xcolor}
+\definecolor{cadmiumgreen}{rgb}{0.0, 0.42, 0.24}
+\usepackage{tcolorbox}
+\newtcolorbox{alertblock}[1]{
+  title={#1}, fonttitle=\bfseries,
+  colback=red!8!white, colframe=red!70!black,
+  left=4pt, right=4pt, top=2pt, bottom=2pt,
+}
+\newtcolorbox{exampleblock}[1]{
+  title={#1}, fonttitle=\bfseries,
+  colback=cadmiumgreen!8!white, colframe=cadmiumgreen,
+  left=4pt, right=4pt, top=2pt, bottom=2pt,
+}
+
+\begin{document}
+\begin{frame}
+  \begin{alertblock}{Key result}
+    The main finding.
+  \end{alertblock}
+  \begin{exampleblock}{Worked example}
+    Some example text.
+  \end{exampleblock}
+\end{frame}
+\end{document}

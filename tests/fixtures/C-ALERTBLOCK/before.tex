@@ -1,0 +1,14 @@
+% Beamer source. Native alertblock; nothing to fix here -- the bug is in how
+% a *converter* might redefine alertblock under ltx-talk (see after.tex).
+\documentclass{beamer}
+
+\begin{document}
+\begin{frame}{A finding}
+  \begin{alertblock}{Key result}
+    The main finding.
+  \end{alertblock}
+  \begin{exampleblock}{Worked example}
+    Some example text.
+  \end{exampleblock}
+\end{frame}
+\end{document}
