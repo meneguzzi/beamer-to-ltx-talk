@@ -1,0 +1,12 @@
+% Beamer source: a naive two-step overlay, no handout: qualifiers. Under
+% Beamer this is fine either way; under ltx-talk's handout build the two
+% \only branches stack onto one page (see after.tex and C-HANDOUT-MODE).
+% Doubles as the "should fire" input for convert_deck.py --lint.
+\documentclass{beamer}
+
+\begin{document}
+\begin{frame}
+\only<1>{Step one}
+\only<2>{Step two}
+\end{frame}
+\end{document}

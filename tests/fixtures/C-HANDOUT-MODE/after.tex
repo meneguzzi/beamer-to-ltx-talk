@@ -1,0 +1,14 @@
+% Converted, ltx-talk. C-HANDOUT-MODE workaround applied: matched
+% handout:0/handout:1 pair so the handout shows only the final step instead
+% of stacking both. Verified 2026-08-12 against ltx-talk 0.5.3 / TeX Live
+% 2026: clean compile both as slides and as handout (see compromises.md).
+% Doubles as the "should NOT fire" input for convert_deck.py --lint.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard=a-4, tagging=on}
+\documentclass{ltx-talk}
+
+\begin{document}
+\begin{frame}
+\only<1| handout:0>{Step one}
+\only<2| handout:1>{Step two}
+\end{frame}
+\end{document}

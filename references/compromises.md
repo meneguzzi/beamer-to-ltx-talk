@@ -468,6 +468,55 @@ why they are absent from the upstream quick-start docs.
 - **Revisit when:** n/a — this is the same single-pass-vs-multi-pass model difference behind
   C-ONSLIDE-ARG and C-OVERLAY-ALIGN, just manifesting as a missing token instead of a leak.
 
+## C-HANDOUT-MODE — mode-qualified overlay specs are only half implemented, so handouts stack every overlay
+
+- **Symptom:** nothing in the slides. The **handout** build prints every overlay of a frame
+  stacked on one page — a step-through built from `\only<1>{img1}` … `\only<4>{img4}` hands
+  the reader four images on top of one another. The build is green, the page count is the
+  expected one-per-frame, and a handout tag-soundness check passes. **Silent** — found
+  converting a 20-deck course, 120 live sites across 13 decks.
+- **Cause:** `ltx-talk.cls` parses Beamer's mode syntax (modes `article`/`handout`/
+  `projector`) but implements only part of the semantics. Beamer's
+  `\begin{frame}<handout:2>` means *hand out slide 2 of this frame*. Under ltx-talk it keeps
+  the frame and suppresses **every** `\only` inside it, leaving only the non-overlay text on
+  the page — it does not select overlay 2. Measured (two-overlay frame, `\only<1>{BLANK}` /
+  `\only<2>{FILLED}`, built with `\PassOptionsToClass{handout}{ltx-talk}`, verified
+  2026-08-12, ltx-talk 0.5.3):
+
+  | Source | Handout output |
+  |---|---|
+  | nothing | **both**, stacked |
+  | `\begin{frame}<handout:0>` | frame dropped ✅ |
+  | `\begin{frame}<handout:2>` | frame kept, all `\only` suppressed, only plain text survives |
+  | `\only<1\| handout:0>` alone | frame kept, **nothing** rendered |
+  | `\only<1\| handout:0>` **and** `\only<2\| handout:1>` | second overlay only ✅ |
+
+  Projector output is correct in all five. Frame-level `<handout:0>` is the one frame-scoped
+  form that behaves, and it drops the whole frame.
+- **Workaround:** mark overlays in **matched pairs** — `handout:0` on the ones to drop *and*
+  `handout:1` on the ones to keep:
+  ```latex
+  \only<1| handout:0>{\includegraphics[...]{environments-blank.pdf}}
+  \only<2| handout:1>{\includegraphics[...]{environments-full.pdf}}
+  ```
+  Whitespace around `|` is trimmed, so either spacing works. **The trap:** marking only the
+  overlays to drop looks like the smaller edit and produces a **blank** frame — silently
+  worse than doing nothing. This is a per-frame judgement call, not a mechanical rewrite: a
+  genuine progressive build often *should* show every step in the handout. Also **different
+  from most of this catalogue**: `<handout:N>` works natively under Beamer, so a deck that
+  has to keep Beamer as an export target needs *different source* for the two backends —
+  worth flagging in a shared preamble maintained for both.
+- **Detect:** `convert_deck.py --lint` flags every frame with 2+ `\only<n>{...}` sites and no
+  `handout:` qualifier anywhere in the frame (frame-level or per-`\only`) as `C-HANDOUT-MODE`.
+  It's advisory, not a rewrite — a genuine progressive build is a legitimate reason for the
+  finding to be a no-op, so it names the candidate frames for a human judgement call rather
+  than auto-annotating them (same reasoning as leaving `\onslide`→`\uncover` manual, see
+  CONTRIBUTING.md). It cannot confirm the bug itself, only flag candidates: **still build and
+  look at the handout, not just the slides** — a tag-soundness check on the handout PDF passes
+  regardless of this bug, and so does the slide build.
+- **Revisit when:** ltx-talk's mode-qualified overlay-spec parsing (article/handout/
+  projector) implements frame-level `<handout:N>` selection, not just suppression.
+
 ## C-DISPMATH-NEWLINE — `\\` after display math is invalid
 
 - **Symptom:** `! There's no line here to end.` at a `\\` or `\\*[Ncm]` that follows a display

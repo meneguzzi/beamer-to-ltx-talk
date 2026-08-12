@@ -338,6 +338,65 @@ def missing_documentmetadata(text: str) -> bool:
     return True
 
 
+FRAME_BEGIN_RE = re.compile(r'\\begin\{frame\*?\}(?:<([^>]*)>)?')
+FRAME_END_RE = re.compile(r'\\end\{frame\*?\}')
+ONLY_OVERLAY_RE = re.compile(r'\\only\s*<([^>]*)>\s*\{')
+
+
+def handout_mode_findings(text: str):
+    r"""Frame-scoped: flag frames with 2+ \only<n>{...} sites and no handout:
+    qualifier anywhere (frame-level <handout:N> or per-only |handout:0/1).
+
+    C-HANDOUT-MODE: ltx-talk's handout build stacks every such overlay onto one
+    page instead of showing one step, with NO warning -- clean compile, correct
+    page count, Tagged: yes. Advisory only: a genuine progressive build should
+    show every step in the handout, so this can't be auto-fixed, only flagged
+    for a human to look at (see references/compromises.md).
+    """
+    hits = []
+    in_frame = False
+    frame_start = 0
+    frame_start_src = ''
+    frame_handout_qualified = False
+    unqualified_onlys = []
+
+    for lineno, raw in enumerate(text.split('\n'), 1):
+        if is_comment(raw):
+            continue
+        code = re.sub(r'(?<!\\)%.*$', '', raw)
+
+        if not in_frame:
+            m = FRAME_BEGIN_RE.search(code)
+            if m:
+                in_frame = True
+                frame_start = lineno
+                frame_start_src = raw.strip()
+                frame_handout_qualified = bool(m.group(1) and 'handout:' in m.group(1))
+                unqualified_onlys = []
+            continue
+
+        if FRAME_END_RE.search(code):
+            if not frame_handout_qualified and len(unqualified_onlys) >= 2:
+                sites = ', '.join(f'line {n}' for n, _ in unqualified_onlys)
+                hits.append((
+                    frame_start, 'C-HANDOUT-MODE',
+                    f'frame ({sites}) has {len(unqualified_onlys)} \\only<n>{{...}} sites and '
+                    'no handout: qualifier anywhere in the frame. The handout build will '
+                    'STACK all of them onto one page with no warning -- clean compile, '
+                    'correct page count, Tagged: yes. This may be fine (a genuine '
+                    'progressive build) or may need matched handout:0/handout:1 pairs '
+                    '(C-HANDOUT-MODE) -- build the handout and look; not auto-fixable.',
+                    frame_start_src))
+            in_frame = False
+            continue
+
+        for om in ONLY_OVERLAY_RE.finditer(code):
+            if 'handout:' not in om.group(1):
+                unqualified_onlys.append((lineno, raw.strip()))
+
+    return hits
+
+
 def lint(text: str, path: str) -> int:
     """Report source-level failures the compiler stays silent about. Returns issue count."""
     hits = []
@@ -354,6 +413,8 @@ def lint(text: str, path: str) -> int:
         for cid, pat, msg in LINTS:
             if pat.search(code):
                 hits.append((lineno, cid, msg, line.strip()))
+    hits.extend(handout_mode_findings(text))
+    hits.sort(key=lambda h: h[0])
 
     print(f'\n=== convert_deck.py --lint: {path} ===', file=sys.stderr)
     if not hits:

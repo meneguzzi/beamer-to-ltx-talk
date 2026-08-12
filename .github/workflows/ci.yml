@@ -48,6 +48,21 @@ jobs:
             exit 1
           fi
 
+      - name: Lint C-HANDOUT-MODE (fires on before.tex, silent on after.tex)
+        run: |
+          set -e
+          # NB: grep for the bracketed [C-HANDOUT-MODE] finding tag, not the bare
+          # string -- the fixture's own directory name (tests/fixtures/C-HANDOUT-MODE/)
+          # would otherwise false-match the --lint banner line that echoes the path.
+          if ! python3 scripts/convert_deck.py tests/fixtures/C-HANDOUT-MODE/before.tex --lint 2>&1 | grep -q '\[C-HANDOUT-MODE\]'; then
+            echo "expected --lint to flag C-HANDOUT-MODE on unqualified \\only sites" >&2
+            exit 1
+          fi
+          if python3 scripts/convert_deck.py tests/fixtures/C-HANDOUT-MODE/after.tex --lint 2>&1 | grep -q '\[C-HANDOUT-MODE\]'; then
+            echo "expected --lint NOT to flag C-HANDOUT-MODE once matched handout: pairs are present" >&2
+            exit 1
+          fi
+
   latex-fixtures:
     runs-on: ubuntu-latest
     # Ubuntu's own texlive packages are years behind and don't have ltx-talk

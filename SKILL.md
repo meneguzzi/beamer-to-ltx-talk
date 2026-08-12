@@ -336,6 +336,16 @@ line, and add a Makefile if converting a course. Copy `assets/Makefile` (targets
 beside `deck.pdf`. Verify a deck with overlays collapses (handout page count < slide count)
 and stays `Tagged: yes`.
 
+⚠ **That check is not enough — actually open the handout and look at it.** Page count and
+`Tagged: yes` both stay green even when every `\only<n>{…}` in a frame stacks onto one page
+instead of showing the intended single step (**C-HANDOUT-MODE**). Beamer's
+`\begin{frame}<handout:2>` idiom does not carry over: under ltx-talk it suppresses every
+`\only` in the frame rather than selecting overlay 2. Any deck with two-or-more
+`\only<n>{...}` sites in one frame and no `handout:` qualifier needs this checked by eye, and
+fixed per-frame with matched `handout:0`/`handout:1` pairs — see the entry for the exact
+recipe and the trap (marking only the overlay to drop, not the one to keep, silently produces
+a *blank* frame).
+
 ---
 
 ## Step 6 — Alt text (this is the point of the migration)
