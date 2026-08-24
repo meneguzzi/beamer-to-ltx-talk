@@ -110,6 +110,57 @@ why they are absent from the upstream quick-start docs.
   ```
 - **Revisit when:** `convert_deck.py` grows a brace matcher of its own.
 
+## C-FRAMESUBTITLE — `\framesubtitle` typesets nothing  ⚠ silent, and documented upstream
+
+- **Symptom: none.** `\framesubtitle{…}` parses, absorbs its argument, and prints **nothing**.
+  The frame title renders normally, the layout is unchanged, the **page count is unchanged**, the
+  tag tree is sound, and the compiler says nothing at any log level. Every fidelity check this
+  skill runs — clean compile, matching page counts, `Tagged: yes`, 0 tagpdf errors — passes while
+  the text is gone. A `pdftotext` diff catches it only against the *Beamer* build; against
+  expectations it looks clean. Real cost: one lecture on a live course shipped with six
+  `\framesubtitle{Quiz}` and the word "Quiz" appearing **zero** times in the PDF.
+- **Cause (verified 2026-08-23, ltx-talk 0.5.3):** the class declares the token list, sets it, and
+  clears it, but **never reads it**. Three mentions in `ltx-talk.cls`, and that is all:
+  ```
+   623:  \tl_gclear:N \g__talk_frame_subtitle_tl        % cleared at slide start
+  1801:  \tl_new:N    \g__talk_frame_subtitle_tl        % declared
+  1810:  \tl_gset:Nn  \g__talk_frame_subtitle_tl {#3}   % set by \framesubtitle
+  ```
+  Compare `\g__talk_frame_title_tl`, which is *additionally* read at 811 (typeset by the
+  `frametitle` template) and 1855 (PDF bookmark). Both commands share the same signature and both
+  store their argument; only the title is ever consumed:
+  ```latex
+  \NewDocumentCommand \frametitle    { D <> { all } O {#3} m }
+    { \__talk_if_overlay:nT {#1} { \tl_gset:Nn \g__talk_frame_title_tl    {#3} } }
+  \NewDocumentCommand \framesubtitle { D <> { all } O {#3} m }
+    { \__talk_if_overlay:nT {#1} { \tl_gset:Nn \g__talk_frame_subtitle_tl {#3} } }
+  ```
+- ✅ **This is intended, and upstream says so.** Do **not** file an issue — `ltx-talk.pdf`,
+  §"Components of a frame → The frame title", states verbatim: *"Currently, the ⟨frame subtitle⟩
+  is not used in output: this will be addressed in later releases. The ⟨options⟩ for both commands
+  are currently unused."* It is a declared temporary gap, not a class bug.
+- **Workaround:** fold both parts into a single `\frametitle` via a macro in the shared preamble:
+  ```latex
+  \newcommand{\frametitlesub}[2]{\frametitle{#1 --- {\normalsize #2}}}
+  ```
+  then rewrite each adjacent pair `\frametitle{A}` + `\framesubtitle{B}` to `\frametitlesub{A}{B}`.
+  The **Beamer-side preamble can define the same macro** as a real `\frametitle` plus
+  `\framesubtitle`, so converted decks stay exportable back to Beamer — the same round-trip
+  property as the C-ALGO-CENTER workaround.
+- **Do NOT** redefine the class's own `\framesubtitle` to append to the title. That needs either
+  the private `\g__talk_frame_title_tl` or a wrapper mirroring `\frametitle`'s `D<>{all} O{#3} m`
+  signature, and both couple the deck to unstable internals — the same manual warns that "the
+  final form of the frame title interface is not decided".
+- **Finding them** — invisible to both the compiler and `pdftotext`, so this is a **source-only**
+  check. Strip whole-line comments first, or commented-out frames produce false hits:
+  ```sh
+  grep -nE '^[^%]*\\framesubtitle' deck.tex
+  ```
+  Not yet a `convert_deck.py --lint` rule; run it by hand as a Step-4 verification grep.
+- **Revisit when:** a later ltx-talk release typesets the subtitle. Watch the changelog for
+  `\framesubtitle`; at that point the `\frametitlesub` macro can be retired in favour of the
+  native command.
+
 ## C-CENTER-ARG — `\center{…}` used as if it took an argument  ⚠ diagnosed nowhere near the fault
 
 - **Symptom:**
@@ -563,6 +614,40 @@ why they are absent from the upstream quick-start docs.
   artifact *and* did not clear the error in practice — prefer removal.
 - **Revisit when:** the float tagging module learns custom float types.
 
+## C-ALGO-CENTER — `algorithmic` inside `center` loses all its indentation  ⚠ silent, and not ltx-talk's fault
+
+- **Symptom:** the pseudocode compiles cleanly, tags cleanly, and comes out **centred line by
+  line**. Every `\State`, `\If` and `\For` indent is gone, so the block reads as a ragged column
+  of prose rather than as code. No error, no warning, and `pdftotext` returns the same words in
+  the same order, so a text-layer check cannot see it either. **Render the page to catch this.**
+- **Cause:** `algorithmic` sets its lines as ordinary paragraph material, and indentation is
+  leading horizontal glue. `\begin{center}` applies `\centering` to *each* line, which absorbs
+  that glue into the surrounding stretch. This is plain LaTeX behaviour, **not** an ltx-talk
+  regression, and it bites under Beamer too. It shows up during conversion only because
+  `center`-wrapped algorithms are a common Beamer-deck habit and the conversion is when someone
+  finally looks at the rendered page.
+- **Workaround:** keep the `center` to place the block horizontally, and restore left alignment
+  inside it with a `minipage` plus `flushleft`:
+  ```latex
+  \begin{center}
+    \begin{minipage}[t]{.9\linewidth}
+    \begin{flushleft}
+    \begin{algorithmic}
+      ...
+    \end{algorithmic}
+    \end{flushleft}
+    \end{minipage}
+  \end{center}
+  ```
+  Size the `minipage` so the longest line fits; `.7` to `.9\linewidth` covered every case on this
+  course. The construction is class-independent, so it survives an export back to Beamer.
+- **Simpler alternative:** drop the `center` entirely. An `algorithmic` block left at the frame
+  margin needs no wrapper at all, and most algorithm frames want the full width anyway.
+- **Finding them:** grep for a `\begin{algorithmic}` whose enclosing environment stack contains
+  `center` but neither `minipage` nor `flushleft`. Whole-line comments must be stripped first, or
+  commented-out frames produce false hits.
+- **Revisit when:** n/a. This is how `center` works.
+
 ## C-NATIVE-ENVS — ltx-talk *already* provides `columns`/`column`/`block`/`frame*`
 
 - **Symptom:** `Command \columns already defined` (or silently worse behaviour) if you paste
@@ -910,7 +995,10 @@ why they are absent from the upstream quick-start docs.
 > | `\onslide<n>{…}` (braced) | blanks **everything after it to end of frame** on early overlays | C-ONSLIDE-ARG |
 > | `\State<2>` used as an overlay spec | overlay never fires; literal **`<2>` printed on the slide** | C-OVERLAY-ALGO |
 > | `\center{…}` used as a command | tag tree corrupts; error lands **far away**, or in another frame | C-CENTER-ARG |
+> | `\framesubtitle{…}` | text **never typeset**; page count unchanged, so every check passes | C-FRAMESUBTITLE † |
 > | `\includegraphics` without `alt=` | screen reader reads out **the filename** | see `alt-text.md` |
+>
+> † Not yet covered by `--lint` — grep the source by hand; see the entry.
 >
 > And five more that survive *every* check in this skill — clean compile, `Tagged: yes`,
 > 0 tagpdf errors — and are only caught by an actual PDF/UA checker, or by nobody at all:
@@ -922,9 +1010,15 @@ why they are absent from the upstream quick-start docs.
 > | saturated emphasis colours | "text with insufficient contrast" | A-CONTRAST |
 > | `tikzpicture` / `\input{…pdf_t}` figures | **no symptom at all** — absent from the reading order and from every audit | A-TIKZ-ALT |
 >
-> Three of these are invisible to `pdftotext` as well as to the compiler: hidden overlay
-> content stays in the PDF text layer. **Render the page** (`pdftoppm -f N -l N -png`) to
-> judge an overlay.
+> And one that no check here catches at all, because the PDF is correct in every respect
+> except how it looks:
+> | Silent failure | Symptom | Entry |
+> |---|---|---|
+> | `algorithmic` wrapped in `center` | pseudocode centred line by line, **all indentation lost** | C-ALGO-CENTER |
+>
+> Four of these are invisible to `pdftotext` as well as to the compiler: hidden overlay
+> content stays in the PDF text layer, and centred pseudocode keeps its word order.
+> **Render the page** (`pdftoppm -f N -l N -png`) to judge an overlay or an algorithm.
 
 | Error text | Cause | Entry |
 |---|---|---|
