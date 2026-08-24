@@ -1,0 +1,18 @@
+% Converted, ltx-talk. C-FRAMETITLE workaround: the braced group is NOT a title
+% under ltx-talk (it renders as body text and the header bar stays empty), so
+% both forms become an explicit \frametitle. Do NOT "fix" this by loading the
+% frame-title-arg class option instead -- that breaks \maketitle (C-MAKETITLE).
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard=a-4, tagging=on}
+\documentclass{ltx-talk}
+
+\begin{document}
+\begin{frame}[c]
+\frametitle{Objectives}
+Body text.
+\end{frame}
+
+\begin{frame}<1>[c]
+\frametitle{Overlay spec ahead of the options bracket}
+Body text.
+\end{frame}
+\end{document}

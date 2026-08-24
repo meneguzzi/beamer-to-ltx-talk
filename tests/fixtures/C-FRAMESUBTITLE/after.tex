@@ -1,0 +1,21 @@
+% Converted, ltx-talk. C-FRAMESUBTITLE workaround: fold both parts into a single
+% \frametitle through a preamble macro, so the subtitle text actually reaches the
+% page. Defining \frametitlesub (rather than redefining \framesubtitle) keeps the
+% deck off ltx-talk's private internals, and lets a Beamer-side preamble define
+% the same macro as a real \frametitle + \framesubtitle pair -- so the deck stays
+% exportable back to Beamer.
+%
+% This is a documented upstream gap, not a class bug: ltx-talk.pdf says the frame
+% subtitle "is not used in output: this will be addressed in later releases".
+% Retire this macro once it is.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard=a-4, tagging=on}
+\documentclass{ltx-talk}
+
+\newcommand{\frametitlesub}[2]{\frametitle{#1 --- {\normalsize #2}}}
+
+\begin{document}
+\begin{frame}[c]
+\frametitlesub{Constraint Satisfaction}{Quiz}
+Body text.
+\end{frame}
+\end{document}

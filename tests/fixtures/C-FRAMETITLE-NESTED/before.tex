@@ -1,0 +1,16 @@
+% Beamer source: both nested-brace frame-title forms. convert_deck.py matches
+% titles with [^{}]*, which cannot see the inner braces, so it silently leaves
+% BOTH of these unconverted -- no error, no warning, and the frame ends up with
+% no title at all (C-FRAMETITLE-NESTED). Ten frames shipped this way across
+% three decks already signed off as clean.
+\documentclass{beamer}
+
+\begin{document}
+\begin{frame}[c]{\only<1>{Example}\only<2>{Find a plan for}}
+Single braced title, nested.
+\end{frame}
+
+\begin{frame}[c]{Arc consistency}{{\sc Inference}}
+Double braced title, nested.
+\end{frame}
+\end{document}

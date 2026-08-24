@@ -1,0 +1,14 @@
+% Beamer source: the braced frame title, plus the leading-<overlayspec> variant
+% that fell through every regex until it was found on a real course. Both are
+% ordinary, legal Beamer; both need converting (see C-FRAMETITLE).
+\documentclass{beamer}
+
+\begin{document}
+\begin{frame}[c]{Objectives}
+Body text.
+\end{frame}
+
+\begin{frame}<1>[c]{Overlay spec ahead of the options bracket}
+Body text.
+\end{frame}
+\end{document}

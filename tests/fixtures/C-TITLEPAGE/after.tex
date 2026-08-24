@@ -1,0 +1,28 @@
+% Converted, ltx-talk. C-TITLEPAGE workaround: do not call \maketitle at all --
+% lay the title frame out by hand so the attribution slot has somewhere to go.
+% assets/preamble-template.tex packages this as \coursetitlepage{title}{subtitle}
+% {attribution}; this fixture inlines a minimal equivalent so it stands alone.
+%
+% Keep \title/\author/\institute regardless: they still feed the footer and the
+% PDF metadata even when \maketitle is never called.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard=a-4, tagging=on}
+\documentclass{ltx-talk}
+
+\title{Constraint Satisfaction}
+\author{A. Lecturer}
+\institute{University of Somewhere}
+
+\begin{document}
+\begin{frame}[c]
+\begin{center}
+{\Large Constraint Satisfaction}
+
+\medskip
+A. Lecturer
+
+{\footnotesize University of Somewhere}
+\end{center}
+\vfill
+{\footnotesize Material adapted from Russell \& Norvig.}
+\end{frame}
+\end{document}

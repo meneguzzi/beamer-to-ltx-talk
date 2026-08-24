@@ -1,0 +1,14 @@
+% Beamer source: an ordinary frame title + subtitle pair. Renders both under
+% Beamer. Under ltx-talk 0.5.3 the subtitle typesets NOTHING -- the class stores
+% the token list and never reads it -- with no error at any log level and no
+% change to the page count (C-FRAMESUBTITLE). One live course shipped six of
+% these with the word "Quiz" appearing zero times in the PDF.
+\documentclass{beamer}
+
+\begin{document}
+\begin{frame}[c]
+\frametitle{Constraint Satisfaction}
+\framesubtitle{Quiz}
+Body text.
+\end{frame}
+\end{document}

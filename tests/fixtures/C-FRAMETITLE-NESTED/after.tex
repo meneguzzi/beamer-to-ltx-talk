@@ -1,0 +1,20 @@
+% Converted, ltx-talk. This is what scripts/fix_frame_titles.py produces --
+% a real brace matcher, run AFTER convert_deck.py, which is the documented
+% workaround for C-FRAMETITLE-NESTED. The double form is joined with " --- ".
+% Note \sc also had to become \scshape: the obsolete two-letter font commands
+% are undefined under ltx-talk (C-OLDFONT), and this is exactly the kind of
+% title that hides one.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard=a-4, tagging=on}
+\documentclass{ltx-talk}
+
+\begin{document}
+\begin{frame}[c]
+\frametitle{\only<1>{Example}\only<2>{Find a plan for}}
+Single braced title, nested.
+\end{frame}
+
+\begin{frame}[c]
+\frametitle{Arc consistency --- {\scshape Inference}}
+Double braced title, nested.
+\end{frame}
+\end{document}

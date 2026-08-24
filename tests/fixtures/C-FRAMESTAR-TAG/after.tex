@@ -1,0 +1,33 @@
+% Converted, ltx-talk. C-FRAMESTAR-TAG workaround: frame* for the verbatim, PLUS
+% order-independent hooks suspending tagging around the WHOLE frame*. Without the
+% hooks this errors ("there is no open structure on the stack" at \end{frame*},
+% mismatched begin/end counts, poppler "Mismatched EMC operator").
+%
+% Things that do NOT work, all tried: suspending only the lstlisting; using
+% \SuspendTagging/\ResumeTagging instead of \tag_stop:/\tag_start:; adding tagging
+% phases; \lstinputlisting from an external file in a normal frame.
+%
+% TRADE-OFF, larger than it looks: the hooks suspend tagging for the entire
+% environment, so EVERYTHING on this slide becomes an artifact -- prose, itemize,
+% tabular, figures -- none of it in the screen-reader reading order, and any
+% \tagpdfsetup written inside the frame is inert. Keep a frame* down to the
+% listing plus the minimum around it, and put anything that matters
+% pedagogically outside the frame as tagged content.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard=a-4, tagging=on}
+\documentclass{ltx-talk}
+\usepackage{listings}
+
+\ExplSyntaxOn
+\AddToHook{env/frame*/before}{\tag_stop:}
+\AddToHook{env/frame*/after}{\tag_start:}
+\ExplSyntaxOff
+
+\begin{document}
+\begin{frame*}
+\frametitle{Gripper domain}
+\begin{lstlisting}
+(define (domain gripper)
+  (:requirements :strips))
+\end{lstlisting}
+\end{frame*}
+\end{document}

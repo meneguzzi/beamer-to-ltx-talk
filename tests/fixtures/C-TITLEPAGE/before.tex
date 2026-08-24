@@ -1,0 +1,17 @@
+% Beamer source: the usual title frame with an attribution line after
+% \maketitle. Renders fine under Beamer. Under ltx-talk \maketitle produces a
+% full, vertically-centred frame, so the attribution prints ON TOP of the title
+% (C-TITLEPAGE) -- a known 0.5.0 limitation.
+\documentclass{beamer}
+
+\title{Constraint Satisfaction}
+\author{A. Lecturer}
+\institute{University of Somewhere}
+
+\begin{document}
+\begin{frame}
+\maketitle
+\vfill
+{\footnotesize Material adapted from Russell \& Norvig.}
+\end{frame}
+\end{document}

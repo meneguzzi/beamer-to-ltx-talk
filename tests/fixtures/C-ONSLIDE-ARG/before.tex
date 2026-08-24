@@ -1,0 +1,16 @@
+% Beamer source: \onslide<n>{...} with a braced argument. Beamer's \onslide DOES
+% take one, so this is correct Beamer and survives conversion untouched, looking
+% right. Under ltx-talk \onslide is declared { D <> { all } } with no +m, so
+% \onslide<2>{X} parses as the DECLARATION \onslide<2> followed by a stray brace
+% group -- and the declaration then blanks everything to the end of the frame.
+% Zero errors, zero warnings, correct page count (C-ONSLIDE-ARG). One 11-deck
+% course had 139 of these; a 20-deck course another 204.
+\documentclass{beamer}
+
+\begin{document}
+\begin{frame}
+\onslide<2>{Revealed on the second overlay.}
+
+Prose that must stay visible on every overlay, including the first.
+\end{frame}
+\end{document}

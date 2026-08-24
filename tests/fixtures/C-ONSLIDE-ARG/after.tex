@@ -1,0 +1,20 @@
+% Converted, ltx-talk. C-ONSLIDE-ARG workaround: use a command that really does
+% take an argument. \uncover is the right default when converting Beamer's
+% \onslide<n>{...} -- it hides but RESERVES the space, so the layout stays stable
+% across overlays; \only<n>{...} omits entirely and reserves nothing.
+%
+% Page counts should be UNCHANGED by this rewrite, which is a good invariant to
+% assert. A bare \onslide<2-> with no group is valid ltx-talk and must be LEFT
+% ALONE. The mechanical \onslide<spec>{ -> \uncover<spec>{ swap also breaks if the
+% group wraps a whole tabular/align*/cases/matrix rather than a cell's contents,
+% which is why convert_deck.py deliberately lints for this rather than rewriting.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard=a-4, tagging=on}
+\documentclass{ltx-talk}
+
+\begin{document}
+\begin{frame}
+\uncover<2>{Revealed on the second overlay.}
+
+Prose that must stay visible on every overlay, including the first.
+\end{frame}
+\end{document}

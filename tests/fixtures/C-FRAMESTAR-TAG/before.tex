@@ -1,0 +1,17 @@
+% Beamer source: a verbatim-bearing frame, the ordinary Beamer spelling.
+% Under ltx-talk the equivalent needs frame* (C-VERBATIM) -- but frame* alone is
+% NOT sufficient: it re-tokenises its body, which under \DocumentMetadata emits
+% unbalanced tagging structures that listings cannot survive (C-FRAMESTAR-TAG).
+% One real 68-page deck with 13 PDDL listings produced 70 errors.
+\documentclass{beamer}
+\usepackage{listings}
+
+\begin{document}
+\begin{frame}[containsverbatim]
+\frametitle{Gripper domain}
+\begin{lstlisting}
+(define (domain gripper)
+  (:requirements :strips))
+\end{lstlisting}
+\end{frame}
+\end{document}
