@@ -50,7 +50,7 @@ in the head comment. Measured for the current set:
 | `C-FRAMESUBTITLE` | subtitle text absent from the PDF | no — needs a `pdftotext` grep |
 | `C-HANDOUT-MODE` | handout stacks all overlays on one page | no — handout build only |
 | `C-FRAMETITLE`, `C-FRAMETITLE-NESTED` | title renders as body text, header bar empty | no — visual |
-| `C-TITLEPAGE` | attribution overprints the title | no — visual |
+| `C-TITLEPAGE` | **did not reproduce on 0.5.3** — see the fixture's head comment | n/a |
 
 ⚠ **`pdftotext` cannot verify overlays.** ltx-talk typesets every overlay branch once and
 toggles visibility with PDF OCG layers, so hidden content is still present in the extracted

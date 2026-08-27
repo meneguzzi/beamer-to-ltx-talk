@@ -1,7 +1,13 @@
 % Beamer source: the usual title frame with an attribution line after
-% \maketitle. Renders fine under Beamer. Under ltx-talk \maketitle produces a
-% full, vertically-centred frame, so the attribution prints ON TOP of the title
-% (C-TITLEPAGE) -- a known 0.5.0 limitation.
+% \maketitle. Renders fine under Beamer. C-TITLEPAGE records that under ltx-talk
+% \maketitle produces a full, vertically-centred frame, so the attribution prints
+% ON TOP of the title -- a known 0.5.0 limitation.
+%
+% ⚠ THAT SYMPTOM DID NOT REPRODUCE (measured 2026-08-24, ltx-talk 0.5.3): this
+% exact input compiles clean and renders the attribution BELOW the title block,
+% no overlap. Either it was fixed between 0.5.0 and 0.5.3, or the trigger needs
+% more than a minimal frame. Re-verify the catalogue entry before filing it
+% upstream. The after.tex layout is still a reasonable title frame either way.
 \documentclass{beamer}
 
 \title{Constraint Satisfaction}
