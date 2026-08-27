@@ -1,9 +1,15 @@
-% Converted, ltx-talk. This is what scripts/fix_frame_titles.py produces --
-% a real brace matcher, run AFTER convert_deck.py, which is the documented
-% workaround for C-FRAMETITLE-NESTED. The double form is joined with " --- ".
-% Note \sc also had to become \scshape: the obsolete two-letter font commands
-% are undefined under ltx-talk (C-OLDFONT), and this is exactly the kind of
-% title that hides one.
+% Converted, ltx-talk. The frame headers are exactly what
+% scripts/fix_frame_titles.py emits from before.tex (verified by running it: "2
+% frame title(s) fixed") -- a real brace matcher, run AFTER convert_deck.py,
+% which is the documented workaround for C-FRAMETITLE-NESTED. The double form is
+% joined with " --- ".
+%
+% The one hand edit is \sc -> \scshape. fix_frame_titles.py preserves \sc
+% verbatim (correctly -- old font commands are convert_deck.py's job), but \sc is
+% undefined under ltx-talk, so the folded title fails to compile until C-OLDFONT
+% is applied too. Confirmed: leaving \sc in gives exit 1 and one "Undefined
+% control sequence". These two compromises have to be fixed together, and a
+% nested title is exactly where one hides the other.
 \DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard=a-4, tagging=on}
 \documentclass{ltx-talk}
 

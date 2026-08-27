@@ -49,7 +49,7 @@ in the head comment. Measured for the current set:
 | `C-ONSLIDE-ARG` | overlay 1 renders **blank**; page count correct | no — visual |
 | `C-FRAMESUBTITLE` | subtitle text absent from the PDF | no — needs a `pdftotext` grep |
 | `C-HANDOUT-MODE` | handout stacks all overlays on one page | no — handout build only |
-| `C-FRAMETITLE`, `C-FRAMETITLE-NESTED` | frame has no title, text falls into the body | no — visual |
+| `C-FRAMETITLE`, `C-FRAMETITLE-NESTED` | title renders as body text, header bar empty | no — visual |
 | `C-TITLEPAGE` | attribution overprints the title | no — visual |
 
 ⚠ **`pdftotext` cannot verify overlays.** ltx-talk typesets every overlay branch once and
