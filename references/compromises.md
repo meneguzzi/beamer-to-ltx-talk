@@ -570,6 +570,56 @@ why they are absent from the upstream quick-start docs.
 - **Revisit when:** ltx-talk's mode-qualified overlay-spec parsing (article/handout/
   projector) implements frame-level `<handout:N>` selection, not just suppression.
 
+## C-DISPLAY-DOLLAR — `$$…$$` silently outdents every list item after it  ⚠ silent, ltx-talk only
+
+- **Symptom:** in an `itemize`, every `\item` **after** a `$$…$$` display loses the list
+  indentation and renders flush with the frame margin. The items *before* it keep theirs, so
+  the list visibly splits in two. Nothing warns: clean compile, correct page count, sound tag
+  tree, `Tagged: yes`, and `pdftotext` returns the same words in the same order. **Render the
+  page to catch this.** `$$` also selects the wrong display skips, so vertical gaps around
+  equations come out uneven — cosmetic, unlike the outdent.
+- **Scale:** one real 20-lecture course had this in **16 of 24 decks across 164 sites** (worst
+  decks: 44, 23, 20 and 16 occurrences). It passed every gate and was found by eye, months
+  after conversion.
+- **Measured (2026-08-27, ltx-talk 0.5.3, TeX Live 2026)** — x-position of the item text in
+  points via `pdftotext -bbox`, same three-item list in each class:
+
+  | class | `$$…$$` | `\[…\]` |
+  |---|---|---|
+  | `article` | 158.7 / 158.7 / 158.7 | 158.7 / 158.7 / 158.7 |
+  | `beamer` | 50.2 / 50.2 / 50.2 | 50.2 / 50.2 / 50.2 |
+  | **`ltx-talk`** | **50.0 / 28.3 / 28.3** | 50.0 / 50.0 / 50.0 |
+
+  Items 2 and 3 lose 21.7pt — exactly the `itemize` indent — and land on the frame margin.
+- **Cause: not pinned down.** The mechanism inside `ltx-talk.cls` is unknown; presumably its
+  list indentation is applied in a way raw `$$` bypasses and `\[…\]` does not. What *is*
+  established:
+  - **Not the tagging.** Reproduces identically under `\DocumentMetadata{tagging=off}`.
+  - **Not a local preamble.** Reproduces with the bare class, no packages.
+  - ⚠ **Not generic LaTeX `list` behaviour, and the `\parshape` explanation is WRONG.** It is
+    the first thing that comes to mind and it survives casual checking — but `article` uses the
+    same `list` machinery and is unaffected, which refutes it. Do not repeat it.
+- **Workaround:** spell display math `\[…\]`. **`convert_deck.py` now rewrites this
+  automatically** — it alternates `\[` and `\]` over the `$$` occurrences in file order,
+  skipping comments and verbatim bodies, and refuses to rewrite anything if the total count is
+  odd (a mismatched `\[`/`\]` would be worse than the original). Pure LaTeX, no ltx-talk
+  dependency, so the deck stays exportable back to Beamer. There is no reason to keep `$$` in
+  any deck.
+- **Finding them:** covered by **`convert_deck.py --lint`** (rule `C-DISPLAY-DOLLAR`), which
+  flags any unescaped `$$` outside comments and verbatim bodies.
+  ```sh
+  grep -nE '^[^%]*(^|[^\\])\$\$' deck.tex
+  ```
+- ⚠ **Check the overfull-vbox count after converting.** The corrected display skips are
+  slightly *larger* than what `$$` produced, so a frame that was already tight can tip over.
+  Compare the count against the same deck before the rewrite, not against zero.
+- **Known limitation of any lexical pass:** `$a$$b$` — two adjacent inline maths with no space
+  — reads as a `$$` to the converter, to the lint, and to the grep above. Vanishingly rare; the
+  converter reports its pair count so it can be eyeballed.
+- **Revisit when:** filed upstream. This is a genuine class bug with a clean MWE and it is
+  **the best-evidenced item in the catalogue** — see issue #5's filing order, which puts it
+  first. Not reported to ltx-talk as of 2026-08-27.
+
 ## C-DISPMATH-NEWLINE — `\\` after display math is invalid
 
 - **Symptom:** `! There's no line here to end.` at a `\\` or `\\*[Ncm]` that follows a display
@@ -998,6 +1048,7 @@ why they are absent from the upstream quick-start docs.
 > | `\State<2>` used as an overlay spec | overlay never fires; literal **`<2>` printed on the slide** | C-OVERLAY-ALGO |
 > | `\center{…}` used as a command | tag tree corrupts; error lands **far away**, or in another frame | C-CENTER-ARG |
 > | `\framesubtitle{…}` | text **never typeset**; page count unchanged, so every check passes | C-FRAMESUBTITLE |
+> | `$$…$$` display math | every `\item` **after** it loses its list indent | C-DISPLAY-DOLLAR |
 > | `\includegraphics` without `alt=` | screen reader reads out **the filename** | see `alt-text.md` |
 >
 >

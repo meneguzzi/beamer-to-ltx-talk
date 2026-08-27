@@ -135,6 +135,75 @@ def strip_atbeginsection(text: str):
     return ''.join(out)
 
 
+# --- C-DISPLAY-DOLLAR ---------------------------------------------------------
+# Environments whose bodies are typeset verbatim: a $$ in there is literal text.
+VERBATIM_ENVS = ('verbatim', 'Verbatim', 'semiverbatim', 'lstlisting', 'minted', 'alltt')
+
+_VB_OPEN_RE = re.compile(r'\\begin\{(?:' + '|'.join(VERBATIM_ENVS) + r')\*?\}')
+_VB_CLOSE_RE = re.compile(r'\\end\{(?:' + '|'.join(VERBATIM_ENVS) + r')\*?\}')
+_DOLLAR_RE = re.compile(r'(?<!\\)\$\$')
+
+
+def rewrite_display_dollar(text: str):
+    r"""C-DISPLAY-DOLLAR: rewrite $$...$$ to \[...\].
+
+    Under ltx-talk (only) every \item after a $$ display loses its list indentation,
+    silently. The delimiters are not paired in the source, so we alternate \[ and \]
+    over the occurrences in file order, skipping comments and verbatim bodies.
+
+    Guarded by an even-count assertion: an odd total means our idea of which $$ are
+    real disagrees with the file's, so we rewrite NOTHING and warn rather than emit
+    a mismatched \[ / \].
+
+    Known limitation: `$a$$b$` (two adjacent inline maths, no space) reads as a $$
+    to this and to any other purely lexical pass. It is vanishingly rare; the pair
+    count is reported so it can be eyeballed.
+    """
+    lines = text.split('\n')
+    eligible, inside = [], False
+    for i, line in enumerate(lines):
+        if is_comment(line):
+            continue
+        if inside:
+            if _VB_CLOSE_RE.search(line):
+                inside = False
+            continue
+        if _VB_OPEN_RE.search(line):
+            inside = True
+            continue
+        code = re.sub(r'(?<!\\)%.*$', '', line)
+        if _DOLLAR_RE.search(code):
+            eligible.append(i)
+
+    total = sum(len(_DOLLAR_RE.findall(re.sub(r'(?<!\\)%.*$', '', lines[i])))
+                for i in eligible)
+    if not total:
+        return text
+    if total % 2:
+        WARN.append(('C-DISPLAY-DOLLAR',
+                     f'found an ODD number of $$ delimiters ({total}) outside comments and '
+                     'verbatim, so none were rewritten — the file would end up with a '
+                     'mismatched \\[ / \\]. Pair them by hand, or check for a $$ inside a '
+                     'verbatim-like environment this script does not know about.'))
+        return text
+
+    state = {'open': True}
+
+    def _swap(_m):
+        out = '\\[' if state['open'] else '\\]'
+        state['open'] = not state['open']
+        return out
+
+    for i in eligible:
+        line = lines[i]
+        m = re.search(r'(?<!\\)%', line)
+        head, tail = (line[:m.start()], line[m.start():]) if m else (line, '')
+        lines[i] = _DOLLAR_RE.sub(_swap, head) + tail
+
+    NOTE.append(f'$$...$$ -> \\[...\\] ({total // 2} pair(s))')
+    return '\n'.join(lines)
+
+
 def pair_framestar_ends(text: str) -> str:
     r"""C-VERBATIM: close every \begin{frame*} with \end{frame*}, not \end{frame}.
 
@@ -254,6 +323,13 @@ LINTS = [
      'braced frame title left unconverted — this renders as BODY TEXT with no error and '
      'no title in the header. Convert to \\frametitle{...} (nested braces: run '
      'scripts/fix_frame_titles.py).'),
+    ('C-DISPLAY-DOLLAR',
+     re.compile(r'(?<!\\)\$\$'),
+     'raw $$...$$ display math: under ltx-talk (and ltx-talk ONLY -- article and beamer are '
+     'both immune) every \\item AFTER the display loses its list indentation and renders '
+     'flush with the frame margin. Nothing warns, the page count is right, the tag tree is '
+     'sound, and pdftotext gives the same word order, so only a rendered page shows it. Use '
+     '\\[...\\]; convert_deck.py rewrites these automatically.'),
     ('C-FRAMESUBTITLE',
      # tempered: skip the line that *defines* a \frametitlesub dual-compile shim,
      # whose Beamer-side body legitimately contains \framesubtitle.
@@ -417,8 +493,18 @@ def lint(text: str, path: str) -> int:
                      '\\input{...tag-commands...} commented out?). ltx-talk half-loads '
                      'without it: \\institute/\\hypersetup/frame*/\\normalsize all come '
                      'up "undefined", none naming the cause.', '\\documentclass{ltx-talk}'))
+    inside_verbatim = False
     for lineno, line in enumerate(text.split('\n'), 1):
         if is_comment(line):
+            continue
+        # A verbatim body is literal text, not code: $$ in an awk snippet is not
+        # display math, and \center{ in a listing is not a tagging hazard.
+        if inside_verbatim:
+            if _VB_CLOSE_RE.search(line):
+                inside_verbatim = False
+            continue
+        if _VB_OPEN_RE.search(line):
+            inside_verbatim = True
             continue
         code = re.sub(r'(?<!\\)%.*$', '', line)     # ignore trailing comments
         for cid, pat, msg in LINTS:
@@ -462,6 +548,7 @@ def main():
     text = open(args.deck, encoding='utf-8').read()
     text = strip_atbeginsection(text)
     text = fix_center_arg(text)
+    text = rewrite_display_dollar(text)   # C-DISPLAY-DOLLAR
 
     out_lines = [convert_line(ln + '\n', args.old_preamble, args.new_preamble)
                  for ln in text.split('\n')]

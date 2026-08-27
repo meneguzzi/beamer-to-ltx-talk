@@ -1,0 +1,27 @@
+% Beamer source: an itemize with a $$...$$ display in the middle of it. The
+% spelling is harmless here -- Beamer indents all three items identically, and so
+% does article. Under ltx-talk 0.5.3 every \item AFTER the display loses the list
+% indentation and renders flush with the frame margin, so the list visibly splits
+% in two (C-DISPLAY-DOLLAR).
+%
+% Measured with pdftotext -bbox, x-position of the item text in points:
+%   $$...$$  ->  50.0 / 28.3 / 28.3     (items 2 and 3 lose the 21.7pt indent)
+%   \[...\]  ->  50.0 / 50.0 / 50.0
+% Nothing warns: clean compile, right page count, sound tag tree, and pdftotext
+% returns the same words in the same order. Only a rendered page shows it.
+%
+% One real 20-lecture course had this in 16 of 24 decks across 164 sites, found
+% by eye months after conversion.
+\documentclass{beamer}
+
+\begin{document}
+\begin{frame}
+\frametitle{Utilities}
+\begin{itemize}
+\item A utility function maps states to reals
+$$U:S \to R$$
+\item The agent maximises expected utility
+\item Preferences must be transitive
+\end{itemize}
+\end{frame}
+\end{document}

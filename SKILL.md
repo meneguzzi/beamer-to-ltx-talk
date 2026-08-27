@@ -35,7 +35,7 @@ Most are not in the upstream docs because they only surface under *tagging*
 >   grid, the input to the A-TABLE-TH work.
 > - `assets/preamble-template.tex` — the deployable ltx-talk shared preamble (copy to the project and fill in the Identity and ThemeAccent blocks at the top).
 > - `scripts/convert_deck.py` — the pattern-based source transformer (frametitles,
->   sections, title page, verbatim frames, empty titles).
+>   sections, title page, verbatim frames, empty titles, `$$…$$` → `\[…\]`).
 > - `scripts/fix_frame_titles.py` — **must be run after `convert_deck.py`**; it catches the
 >   nested-brace frame titles that `convert_deck.py` skips *silently* (C-FRAMETITLE-NESTED).
 > - `scripts/alt_text_audit.py` / `scripts/alt_text_apply.py` — the alt-text worklist.
@@ -43,9 +43,9 @@ Most are not in the upstream docs because they only surface under *tagging*
 >   (overlays, columns, templates). Use it for *how ltx-talk works*; use this skill for
 >   *how to convert*.
 
-> ### ⚠ Seven failures in this skill produce NO usable error message
+> ### ⚠ Eight failures in this skill produce NO usable error message
 > They will not show up in a log (or point anywhere near the fault), and "it compiled" means
-> nothing. **`convert_deck.py --lint` greps for 1-4 and 7 — run it before every build.**
+> nothing. **`convert_deck.py --lint` greps for 1-4, 7 and 8 — run it before every build.**
 > (5 and 6 are alt-text findings: use `alt_text_audit.py`.)
 > 1. **Nested-brace frame titles** left unconverted → the frame has *no title*; the text
 >    renders as body text (C-FRAMETITLE-NESTED). Run `fix_frame_titles.py`, then grep.
@@ -67,6 +67,9 @@ Most are not in the upstream docs because they only surface under *tagging*
 >    never reads it (C-FRAMESUBTITLE). The **page count is unchanged**, so a page-count
 >    fidelity check passes while the text is gone. Documented upstream, so do not file it —
 >    fold both parts into the title with `\frametitlesub{Title}{Subtitle}`.
+> 8. **`$$…$$` display math** → every `\item` *after* the display loses its list indentation
+>    and renders flush with the frame margin (C-DISPLAY-DOLLAR). ltx-talk only — `article` and
+>    `beamer` are both immune. `convert_deck.py` rewrites these to `\[…\]` automatically.
 >
 > Also: **measure against a build that actually ran.** Beamer + `\DocumentMetadata` is fatal,
 > so a half-migrated repo can leave stale PDFs lying around, and `pdfinfo` will happily read
@@ -278,7 +281,8 @@ to zero before spending a compile.
 
 It flags: unconverted braced frame titles (C-FRAMETITLE / C-FRAMETITLE-NESTED), `\center{…}`
 and friends (C-CENTER-ARG), `\State<n>` silent overlays (C-OVERLAY-ALGO), `\framesubtitle`
-(C-FRAMESUBTITLE — accepted by the class and never typeset), leftover
+(C-FRAMESUBTITLE — accepted by the class and never typeset), raw `$$…$$`
+(C-DISPLAY-DOLLAR — outdents every later `\item`), leftover
 `\tableofcontents` (C-TOC), Beamer-only commands (C-NOBEAMER, C-BACKGROUND), `algpseudocodex`
 (C-ALGO), and the `algorithm` float (C-ALGO-FLOAT).
 

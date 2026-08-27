@@ -1,0 +1,25 @@
+% Converted, ltx-talk. C-DISPLAY-DOLLAR workaround: spell display math \[...\].
+% This is exactly what scripts/convert_deck.py now emits -- it alternates \[ and
+% \] over the $$ occurrences in file order, skipping comments and verbatim
+% bodies, and refuses to rewrite at all if the count is odd.
+%
+% The fix is pure LaTeX with no ltx-talk dependency, so the deck stays exportable
+% back to Beamer: \[...\] is correct there too (and is the form Beamer's own
+% documentation uses). There is no reason to keep $$ in any deck.
+%
+% convert_deck.py --lint flags the before.tex form as C-DISPLAY-DOLLAR and passes
+% this file clean.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard=a-4, tagging=on}
+\documentclass{ltx-talk}
+
+\begin{document}
+\begin{frame}
+\frametitle{Utilities}
+\begin{itemize}
+\item A utility function maps states to reals
+\[U:S \to R\]
+\item The agent maximises expected utility
+\item Preferences must be transitive
+\end{itemize}
+\end{frame}
+\end{document}
