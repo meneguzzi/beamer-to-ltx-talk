@@ -20,3 +20,19 @@ env/
 .ruff_cache/
 .coverage
 htmlcov/
+
+# LaTeX build artefacts (the tests/fixtures/*.tex get compiled in place)
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.nav
+*.out
+*.pdf
+*.snm
+*.synctex.gz
+*.toc
+*.vrb
+*.xdv
