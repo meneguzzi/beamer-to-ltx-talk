@@ -152,11 +152,13 @@ why they are absent from the upstream quick-start docs.
   signature, and both couple the deck to unstable internals — the same manual warns that "the
   final form of the frame title interface is not decided".
 - **Finding them** — invisible to both the compiler and `pdftotext`, so this is a **source-only**
-  check. Strip whole-line comments first, or commented-out frames produce false hits:
+  check. Covered by **`convert_deck.py --lint`** (rule `C-FRAMESUBTITLE`), which strips comments
+  first. By hand, do the same or commented-out frames produce false hits:
   ```sh
   grep -nE '^[^%]*\\framesubtitle' deck.tex
   ```
-  Not yet a `convert_deck.py --lint` rule; run it by hand as a Step-4 verification grep.
+  The lint deliberately does **not** fire on the line that *defines* a `\frametitlesub`
+  dual-compile shim, whose Beamer-side body legitimately contains `\framesubtitle`.
 - **Revisit when:** a later ltx-talk release typesets the subtitle. Watch the changelog for
   `\framesubtitle`; at that point the `\frametitlesub` macro can be retired in favour of the
   native command.
@@ -995,10 +997,9 @@ why they are absent from the upstream quick-start docs.
 > | `\onslide<n>{…}` (braced) | blanks **everything after it to end of frame** on early overlays | C-ONSLIDE-ARG |
 > | `\State<2>` used as an overlay spec | overlay never fires; literal **`<2>` printed on the slide** | C-OVERLAY-ALGO |
 > | `\center{…}` used as a command | tag tree corrupts; error lands **far away**, or in another frame | C-CENTER-ARG |
-> | `\framesubtitle{…}` | text **never typeset**; page count unchanged, so every check passes | C-FRAMESUBTITLE † |
+> | `\framesubtitle{…}` | text **never typeset**; page count unchanged, so every check passes | C-FRAMESUBTITLE |
 > | `\includegraphics` without `alt=` | screen reader reads out **the filename** | see `alt-text.md` |
 >
-> † Not yet covered by `--lint` — grep the source by hand; see the entry.
 >
 > And five more that survive *every* check in this skill — clean compile, `Tagged: yes`,
 > 0 tagpdf errors — and are only caught by an actual PDF/UA checker, or by nobody at all:

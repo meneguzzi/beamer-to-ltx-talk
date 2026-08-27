@@ -8,6 +8,11 @@
 % This is a documented upstream gap, not a class bug: ltx-talk.pdf says the frame
 % subtitle "is not used in output: this will be addressed in later releases".
 % Retire this macro once it is.
+%
+% assets/preamble-template.tex now ships this definition, so a real conversion
+% gets it from the shared preamble; it is repeated here only to keep the fixture
+% standalone-compilable. convert_deck.py --lint flags the before.tex form as
+% C-FRAMESUBTITLE and passes this file clean.
 \DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard=a-4, tagging=on}
 \documentclass{ltx-talk}
 

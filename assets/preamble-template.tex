@@ -257,6 +257,29 @@
   {\tagstructbegin{tag=Figure,alt={#1}}\tagmcbegin{}}
   {\tagmcend\tagstructend}
 
+%% C-FRAMESUBTITLE: \framesubtitle is accepted by ltx-talk 0.5.3 and typesets
+%% NOTHING -- the class declares, sets and clears \g__talk_frame_subtitle_tl but
+%% never reads it. No error, no warning, and the page count is unchanged, so the
+%% text simply vanishes and every fidelity check still passes. This is a declared
+%% upstream gap, not a bug: ltx-talk.pdf says the frame subtitle "is not used in
+%% output: this will be addressed in later releases."
+%% Fold both parts into the one thing the class does typeset, the frame title:
+%%
+%%   \frametitlesub{<title>}{<subtitle>}
+%%
+%% Defined as a NEW macro rather than a redefinition of \framesubtitle on
+%% purpose: appending to the title needs either the private
+%% \g__talk_frame_title_tl or a wrapper mirroring \frametitle's `D<>{all} O{#3} m'
+%% signature, and the same manual warns that "the final form of the frame title
+%% interface is not decided". Do not couple decks to that.
+%% Keep this in sync anywhere a deck might see it (cf. altfigure above): a deck
+%% that still dual-compiles under plain Beamer wants the SAME macro name defined
+%% there as a real \frametitle + \framesubtitle pair --
+%%   \newcommand{\frametitlesub}[2]{\frametitle{#1}\framesubtitle{#2}}
+%% -- so the source stays exportable both ways.
+%% Retire this once a later ltx-talk release typesets the subtitle natively.
+\newcommand{\frametitlesub}[2]{\frametitle{#1 --- {\normalsize #2}}}
+
 %% C-OLDFONT: ltx-talk does not define the obsolete two-letter font commands,
 %% and decks use them inside maths too, where a text-shape switch is illegal.
 \providecommand{\sc}{\ifmmode\else\scshape\fi}

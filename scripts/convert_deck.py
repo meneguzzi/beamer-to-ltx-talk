@@ -254,6 +254,17 @@ LINTS = [
      'braced frame title left unconverted — this renders as BODY TEXT with no error and '
      'no title in the header. Convert to \\frametitle{...} (nested braces: run '
      'scripts/fix_frame_titles.py).'),
+    ('C-FRAMESUBTITLE',
+     # tempered: skip the line that *defines* a \frametitlesub dual-compile shim,
+     # whose Beamer-side body legitimately contains \framesubtitle.
+     re.compile(r'^(?:(?!\\(?:new|renew|provide)command'
+                r'|\\(?:New|Renew|Provide)DocumentCommand).)*\\framesubtitle\b'),
+     '\\framesubtitle typesets NOTHING in ltx-talk: the class declares, sets and clears the '
+     'subtitle token list but never reads it. No error, no warning, and the PAGE COUNT IS '
+     'UNCHANGED, so every fidelity check still passes while the text is gone. Documented '
+     'upstream ("not used in output: this will be addressed in later releases"), so do not '
+     'file it. Fold both parts into the title with the preamble macro: '
+     '\\frametitlesub{Title}{Subtitle}.'),
     ('C-CENTER-ARG',
      re.compile(r'\\center\s*\{'),
      '\\center{...} takes no argument — it is a declaration. Under tagging this leaks an '

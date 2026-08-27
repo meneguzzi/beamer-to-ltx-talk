@@ -43,9 +43,10 @@ Most are not in the upstream docs because they only surface under *tagging*
 >   (overlays, columns, templates). Use it for *how ltx-talk works*; use this skill for
 >   *how to convert*.
 
-> ### ⚠ Five failures in this skill produce NO usable error message
+> ### ⚠ Seven failures in this skill produce NO usable error message
 > They will not show up in a log (or point anywhere near the fault), and "it compiled" means
-> nothing. **`convert_deck.py --lint` greps for all five — run it before every build.**
+> nothing. **`convert_deck.py --lint` greps for 1-4 and 7 — run it before every build.**
+> (5 and 6 are alt-text findings: use `alt_text_audit.py`.)
 > 1. **Nested-brace frame titles** left unconverted → the frame has *no title*; the text
 >    renders as body text (C-FRAMETITLE-NESTED). Run `fix_frame_titles.py`, then grep.
 > 2. **`\onslide<2>{…}`** → ltx-talk's `\onslide` takes **no argument**, so this parses as a
@@ -62,6 +63,10 @@ Most are not in the upstream docs because they only surface under *tagging*
 > 5. **Images without `alt=`** → a screen reader reads out *the filename*.
 > 6. **`tikzpicture` / `pgfplots` / `\input{…pdf_t}` figures** → untagged entirely, with **no
 >    warning, no `/Alt`, and no checker complaint** (A-TIKZ-ALT). Wrap each in `altfigure`.
+> 7. **`\framesubtitle{…}`** → typesets **nothing**: ltx-talk sets the subtitle token list and
+>    never reads it (C-FRAMESUBTITLE). The **page count is unchanged**, so a page-count
+>    fidelity check passes while the text is gone. Documented upstream, so do not file it —
+>    fold both parts into the title with `\frametitlesub{Title}{Subtitle}`.
 >
 > Also: **measure against a build that actually ran.** Beamer + `\DocumentMetadata` is fatal,
 > so a half-migrated repo can leave stale PDFs lying around, and `pdfinfo` will happily read
@@ -160,7 +165,11 @@ instead if the overlay is genuinely needed.
 Also add, up front, the things every real deck turns out to need (all catalogued):
 the `frame*` tagging hooks (**C-FRAMESTAR-TAG** — without these, listings destroy the tag
 tree), the nesting-safe `\Call` (**C-CALL-NEST**), tcolorbox theorem environments
-(**C-THEOREM**), and `\ifmmode`-guarded `\sc`/`\it`/`\bf` stubs (**C-OLDFONT**).
+(**C-THEOREM**), `\ifmmode`-guarded `\sc`/`\it`/`\bf` stubs (**C-OLDFONT**), and
+`\frametitlesub{Title}{Subtitle}` (**C-FRAMESUBTITLE** — ltx-talk accepts `\framesubtitle`
+and typesets nothing, so the subtitle has to ride along inside the frame title). Define it as
+a *new* macro, never as a redefinition of `\framesubtitle`: that would need the class's
+private title token list, and upstream says the frame-title interface is not yet settled.
 
 **And these two lines, which cost nothing now and a full re-verification pass later:**
 ```latex
@@ -268,7 +277,8 @@ Both are pure source greps needing no build — so run this on every deck, every
 to zero before spending a compile.
 
 It flags: unconverted braced frame titles (C-FRAMETITLE / C-FRAMETITLE-NESTED), `\center{…}`
-and friends (C-CENTER-ARG), `\State<n>` silent overlays (C-OVERLAY-ALGO), leftover
+and friends (C-CENTER-ARG), `\State<n>` silent overlays (C-OVERLAY-ALGO), `\framesubtitle`
+(C-FRAMESUBTITLE — accepted by the class and never typeset), leftover
 `\tableofcontents` (C-TOC), Beamer-only commands (C-NOBEAMER, C-BACKGROUND), `algpseudocodex`
 (C-ALGO), and the `algorithm` float (C-ALGO-FLOAT).
 
