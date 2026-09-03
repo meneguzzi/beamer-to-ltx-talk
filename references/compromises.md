@@ -570,6 +570,55 @@ why they are absent from the upstream quick-start docs.
 - **Revisit when:** ltx-talk's mode-qualified overlay-spec parsing (article/handout/
   projector) implements frame-level `<handout:N>` selection, not just suppression.
 
+## C-PDFTEX-MATH — pdfTeX corrupts every comma and period in the maths text layer  ⚠ silent, engine-dependent
+
+- **Symptom:** the slides render correctly, but the PDF *text layer* is wrong wherever there is
+  maths. Every comma extracts as `;`, every period as `:`, `\ldots` as `": : :"`, `\checkmark`
+  as the letter `X`. Nothing warns: clean compile, correct page count, `Tagged: yes`, 0 tagpdf
+  errors. Copy-paste, full-text search and any assistive technology reading the text layer
+  (rather than tagged `/ActualText`) get the corrupted version.
+- **Measured (2026-08-28, ltx-talk 0.6.0, TeX Live 2026)** — one frame, source
+  `Inline: $g(a, b, c)$ and $x.y$ and $p \ldots q$.`:
+
+  | engine | `pdftotext` output |
+  |---|---|
+  | **pdfLaTeX** | `Inline: g (a; b; c) and x:y and p : : : q.` |
+  | XeLaTeX | `Inline: 𝑔(𝑎, 𝑏, 𝑐) and 𝑥.𝑦 and 𝑝 … 𝑞.` |
+  | LuaLaTeX | `Inline: 𝑔(𝑎, 𝑏, 𝑐) and 𝑥.𝑦 and 𝑝 … 𝑞.` |
+
+  The Beamer original of the same source extracts correctly under pdfTeX, so the corruption
+  arrives with the class, not with the engine alone.
+- **Cause:** `ltx-talk.cls` picks its maths font by engine. Under LuaTeX/XeTeX it loads
+  `NewCMSansMath-Regular.otf` via `\setmathfont`; otherwise it falls back to
+  `\RequirePackage{sansmathfonts}`, whose OML-encoded sans maths has wrong ToUnicode maps.
+- **Workaround:** build with **LuaLaTeX** — `latexmk -lualatex`, which `assets/Makefile` now
+  does. No source change is needed: this is purely a build-engine fix, so an already-converted
+  deck is repaired by rebuilding.
+- ⚠ **Not XeLaTeX.** XeTeX takes the same OpenType branch and fixes the text layer, but the
+  MathML generation is LuaTeX-only:
+
+  ```latex
+  \sys_if_engine_luatex:TF
+    { \RequirePackage { lua-unicode-math }
+      \tagpdfsetup { math / mathml / luamml / load = true } }
+    { \RequirePackage { unicode-math } }
+  ```
+
+  Measured on the same MWE (`qpdf --qdf`, then grep): LuaLaTeX emits 34 MathML/`/AF` references
+  and 4 `<math>` payloads; XeLaTeX emits 15 references and **no MathML at all** — `/Formula`
+  elements with nothing inside them. XeTeX also warns `tagpdf ... xetex doesn't support
+  interword`. For tagged maths, LuaLaTeX is the only correct choice.
+- **Costs of the switch:** LuaLaTeX is slower, and font metrics shift slightly (a probe moved a
+  measured x-position from 50.041 to 50.165), so a deck can reflow. Re-check page counts against
+  the pre-switch build after changing engine.
+- **Finding it:** extract the text layer and look for corrupted maths punctuation.
+  ```sh
+  pdftotext deck.pdf - | grep -n '[a-z]; [a-z]'
+  ```
+  `pdfinfo deck.pdf | grep Producer` says which engine actually built a given PDF.
+- **Revisit when:** ltx-talk gives the pdfTeX path a maths font with correct ToUnicode maps, or
+  drops the pdfTeX fallback. Verified present on 0.6.0 (2026-08-23).
+
 ## C-DISPLAY-DOLLAR — `$$…$$` silently outdents every list item after it  ⚠ silent, ltx-talk only
 
 - **Symptom:** in an `itemize`, every `\item` **after** a `$$…$$` display loses the list

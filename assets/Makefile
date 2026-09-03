@@ -16,8 +16,13 @@
 # the ltx-talk `handout' option on the command line (no per-deck edits), which
 # collapses every overlay frame to a single page.
 
+# -lualatex, not -pdf: under pdfTeX, ltx-talk falls back to sansmathfonts, whose
+# ToUnicode maps are wrong -- every comma in maths extracts from the text layer as
+# `;', every period as `:'. The slides *render* correctly, so nothing but a text
+# extraction catches it. LuaTeX also gets MathML on formulas; XeTeX does not.
+# See C-PDFTEX-MATH.
 LATEXMK := latexmk
-LATEXMKFLAGS := -pdf -interaction=nonstopmode -halt-on-error
+LATEXMKFLAGS := -lualatex -interaction=nonstopmode -halt-on-error
 
 # <<ADAPT>> glob to match your source layout, e.g.:
 #   SRCS := $(wildcard *.tex)

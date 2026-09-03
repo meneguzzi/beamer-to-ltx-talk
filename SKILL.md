@@ -292,8 +292,13 @@ and friends (C-CENTER-ARG), `\State<n>` silent overlays (C-OVERLAY-ALGO), `\fram
 
 Build from inside the deck's directory so `../` inputs and `images/` resolve:
 ```sh
-latexmk -C deck.tex && latexmk -pdf -interaction=nonstopmode deck.tex
+latexmk -C deck.tex && latexmk -lualatex -interaction=nonstopmode deck.tex
 ```
+**Use `-lualatex`, not `-pdf`.** Under pdfTeX, ltx-talk falls back to `sansmathfonts` and every
+comma in maths lands in the text layer as `;`, every period as `:` — the slides look right, so
+only a text extraction catches it. LuaTeX is also the only engine that gets MathML on formulas;
+XeTeX fixes the fonts but emits empty `/Formula` elements. See **C-PDFTEX-MATH**.
+
 Then triage against `references/compromises.md`. The signatures you will most likely hit:
 
 - **`Improper \halign inside $$'s`** → an `algpseudocodex` algorithm. Confirm the preamble
@@ -314,12 +319,13 @@ Iterate until `latexmk` exits 0.
 
 ## Step 4 — Verify (don't trust "it compiled")
 
-For each converted deck confirm **all four** — the third one has no error message and is the
-one people miss:
+For each converted deck confirm **all five** — the third and fourth have no error message and
+are the ones people miss:
 ```sh
 pdfinfo deck.pdf | grep -E 'Pages|Tagged'                  # Tagged: yes, pages == baseline
 grep -c 'tagpdf Error' deck.log                            # must be 0 (Warnings are OK)
 grep -nE '^\s*\\begin\{frame\}(<[^>]*>)?(\[[^]]*\])?\{' deck.tex     # must be EMPTY: title-less frames
+pdftotext deck.pdf - | grep -n '[a-z]; [a-z]'              # must be EMPTY: pdfTeX maths corruption
 grep -c 'Alternative text for graphic is missing' deck.log # -> 0 after Step 6
 pdftoppm -png -r 70 -f 1 -l 4 deck.pdf /tmp/new            # eyeball title/heading/columns
 ```
@@ -328,6 +334,9 @@ pdftoppm -png -r 70 -f 1 -l 4 deck.pdf /tmp/new            # eyeball title/headi
   fatal, so in a half-migrated repo `pdfinfo` may be reading a **stale PDF** and handing you a
   confident, wrong number.
 - **`Tagged: yes`** and **0 tagpdf Errors**.
+- **No corrupted maths in the text layer.** A hit on that `grep` means the deck was built with
+  pdfTeX; rebuild with `-lualatex` (**C-PDFTEX-MATH**). `pdfinfo deck.pdf | grep Producer`
+  confirms which engine produced a given PDF.
 - Spot-check the title page, a section divider, a columns/figure frame, and an algorithm
   frame against the reference renders.
 
