@@ -604,10 +604,16 @@ why they are absent from the upstream quick-start docs.
     { \RequirePackage { unicode-math } }
   ```
 
-  Measured on the same MWE (`qpdf --qdf`, then grep): LuaLaTeX emits 34 MathML/`/AF` references
-  and 4 `<math>` payloads; XeLaTeX emits 15 references and **no MathML at all** — `/Formula`
-  elements with nothing inside them. XeTeX also warns `tagpdf ... xetex doesn't support
-  interword`. For tagged maths, LuaLaTeX is the only correct choice.
+  Measured on the MWE above plus one display, `\[ f(x) = \sum_{i=1}^{n} a_i x^i \]`, after
+  **three passes** (`qpdf --qdf --object-streams=disable`, then `grep -ao '<math'`): LuaLaTeX
+  emits **4** `<math>` payloads, XeLaTeX **0** — `/Formula` elements with nothing inside them.
+  XeTeX also warns `tagpdf ... xetex doesn't support interword`. For tagged maths, LuaLaTeX is
+  the only correct choice.
+
+  ⚠ **Count passes before concluding anything here.** On a single pass *both* engines emit 0
+  payloads — the MathML only appears once the build converges. A one-pass build therefore makes
+  LuaLaTeX look no better than XeTeX. Note that a non-halting `!` error is enough to make
+  `latexmk` stop after one pass, so this is easy to hit by accident.
 - **Costs of the switch:** LuaLaTeX is slower, and font metrics shift slightly (a probe moved a
   measured x-position from 50.041 to 50.165), so a deck can reflow. Re-check page counts against
   the pre-switch build after changing engine.
