@@ -276,12 +276,18 @@ why they are absent from the upstream quick-start docs.
   leaving in a deck you intend to verify.
 - **Detect:** the deck's own `.log` says whether the build converged. After `latexmk` finishes:
   ```sh
+  grep -ciE 'Rerun to get|Label\(s\) may have changed' deck.log   # PRIMARY: did NOT converge
   grep -c 'Latexmk: Errors' build.log                            # latexmk gave up
-  grep -ciE 'Rerun to get|Label\(s\) may have changed' deck.log   # did NOT converge
-  grep -c 'There were undefined references' deck.log              # refs unresolved
+  grep -c 'There were undefined references' deck.log              # refs unresolved (see below)
   ```
-  All three must be 0. **Not lint-detectable:** the offending `\newcommand` usually lives in
-  an `\input`-ed shared preamble, which `convert_deck.py --lint` does not read.
+  All three must be 0, but ⚠ **they are not interchangeable — check the first.** A deck with no
+  forward references produces *no* undefined-reference warning while still being capped at one
+  pass. Measured on a real 98-page deck with the clash present: `Rerun to get… = 1`,
+  `There were undefined references = 0`. The rerun signal caught it; the undefined-reference
+  grep alone would have missed it entirely.
+
+  **Not lint-detectable:** the offending `\newcommand` usually lives in an `\input`-ed shared
+  preamble, which `convert_deck.py --lint` does not read.
 - ⚠ **"It produced a PDF with the right page count" is not evidence of a sound build.** The
   broken build above emits a correct-looking, correctly-paginated, `Tagged: yes` PDF.
 - **Revisit when:** n/a — this is `latexmk` behaving correctly. The fix is to have no errors.
