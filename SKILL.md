@@ -62,7 +62,9 @@ Most are not in the upstream docs because they only surface under *tagging*
 >    (C-CENTER-ARG). Cost a full day of bisection. Use `\begin{center}…\end{center}`.
 > 5. **Images without `alt=`** → a screen reader reads out *the filename*.
 > 6. **`tikzpicture` / `pgfplots` / `\input{…pdf_t}` figures** → untagged entirely, with **no
->    warning, no `/Alt`, and no checker complaint** (A-TIKZ-ALT). Wrap each in `altfigure`.
+>    warning, no `/Alt`, and no checker complaint** (A-TIKZ-ALT). For a `tikzpicture` or a
+>    `pgfplots` axis, pass the latex-lab `alt` key on the environment itself
+>    (`\begin{tikzpicture}[alt=…]`). Inputted figures need `\altinput{…}{fig.pdf_t}`.
 > 7. **`\framesubtitle{…}`** → typesets **nothing**: ltx-talk sets the subtitle token list and
 >    never reads it (C-FRAMESUBTITLE). The **page count is unchanged**, so a page-count
 >    fidelity check passes while the text is gone. Documented upstream, so do not file it —
@@ -75,13 +77,17 @@ Most are not in the upstream docs because they only surface under *tagging*
 > so a half-migrated repo can leave stale PDFs lying around, and `pdfinfo` will happily read
 > them and give you a confident, wrong baseline.
 >
-> And: **`Tagged: yes` is not a pass.** It says a tag tree exists, not that it is right. Five
+> And: **`Tagged: yes` is not a pass.** It says a tag tree exists, not that it is right. Four
 > further failures survive a clean compile, `Tagged: yes`, 0 tagpdf errors *and* complete alt
-> text — orphan `H4` frame titles, `Formula` elements with no `/Alt`, `tabular`s with no `TH`,
-> sub-4.5:1 emphasis colours, and untagged `tikzpicture`/inputted figures. Only a real PDF/UA
-> checker finds the first four; **nothing at all finds the fifth**, because those figures are
-> missing from the tag tree rather than wrong inside it. Two are one-line preamble fixes:
-> **put them in at Step 1** (A-HEADINGS, A-MATHALT). See Step 6b.
+> text — orphan `H4` frame titles, `tabular`s with no `TH`, sub-4.5:1 emphasis colours, and
+> untagged `tikzpicture`/inputted figures. Only a real PDF/UA checker finds the first three;
+> **nothing at all finds the fourth**, because those figures are missing from the tag tree
+> rather than wrong inside it. One is a one-line preamble fix: **put it in at Step 1**
+> (A-HEADINGS). See Step 6b.
+>
+> But a checker complaint is not automatically a defect — some are the checker applying a
+> PDF/UA-**1** rule to a ua-2 document. "Maths has no description" is the standard example:
+> the ua-2 answer is MathML, not `/Alt`. See **A-MATHALT** before "fixing" it.
 >
 > And **verify overlays by rendering pages, never with `pdftotext`** — hidden overlay content
 > stays in the PDF text layer, so extraction reports text that is invisible on the slide.
@@ -174,14 +180,19 @@ and typesets nothing, so the subtitle has to ride along inside the frame title).
 a *new* macro, never as a redefinition of `\framesubtitle`: that would need the class's
 private title token list, and upstream says the frame-title interface is not yet settled.
 
-**And these two lines, which cost nothing now and a full re-verification pass later:**
+**And this line, which costs nothing now and a full re-verification pass later:**
 ```latex
 \tagpdfsetup{role/new-tag = frametitle / H2}  % else every frame title is an orphan H4
-\tagpdfsetup{math/alt/use}                    % else Formula elements carry no /Alt
 ```
-Without them a PDF/UA checker rejects **every** deck in the course for "headings do not begin
-at level one" and "images without a description" — even though the compile is clean, the
-output says `Tagged: yes`, and every graphic has `alt=` (**A-HEADINGS**, **A-MATHALT**).
+Without it a PDF/UA checker rejects **every** deck in the course for "headings do not begin
+at level one" — even though the compile is clean and the output says `Tagged: yes`
+(**A-HEADINGS**).
+
+> ⚠ **Do not add `\tagpdfsetup{math/alt/use}`.** It is tempting, because a checker will report
+> your maths as "images without a description" without it. But it puts an `/Alt` on every
+> `Formula`, and a screen reader that finds `/Alt` reads that *instead of* the MathML — which
+> is the accessible representation of maths under PDF/UA-2. The kernel leaves the switch off
+> for ua-2 on purpose. See **A-MATHALT**.
 While you are in `\coursetitlepage`, tag the deck title as the document's `H1`; nothing else
 in a deck is one. See Step 6b.
 
@@ -410,7 +421,7 @@ The audit reports a second finding type, `untagged_figure`: `tikzpicture`, `pgfp
 proves nothing about them — the warning it counts only ever fires for `\includegraphics`, so a
 deck full of undescribed plots reports `0`. They have no `preview_png` either, because the
 figure does not exist until TeX draws it; read the built PDF page instead. `alt_text_apply.py`
-skips them by design: wrapping in `altfigure` is a structural edit, done by hand.
+skips them by design: adding the `alt` key, or `\altinput`, is a source edit done by hand.
 
 You need **both inputs**. The rendered image gives the figure's *content* (node labels, axis
 labels); the LaTeX context gives its *role in the argument*. Context alone yields "a search
@@ -432,10 +443,10 @@ still rejected by a real PDF/UA checker on four counts. Read the **A-\*** sectio
 | Checker complaint | Cause | Fix |
 |---|---|---|
 | "headings do not begin at level one" | ltx-talk roles `frametitle` to `H4`, and a title page has no heading at all | `role/new-tag = frametitle / H2` + point the kernel's automatic paragraph tagger at `H1` — **A-HEADINGS**, do NOT hand-write `\tagstructbegin{tag=H1}` |
-| "images without a description", pointing at *maths* | `Formula` elements get no `/Alt`; the switch is auto-on for ua-**1** only | `\tagpdfsetup{math/alt/use}` — **A-MATHALT** |
+| "images without a description", pointing at *maths* | the checker is applying a ua-**1** rule; under ua-2 maths is made accessible by MathML, not by `/Alt` | **nothing** — do not set `math/alt/use`; verify MathML is present instead, and validate against ua-2 — **A-MATHALT** |
 | "tables missing headers" | every `tabular` is tagged `Table`/`TR`/`TD`, never `TH` | classify each: `table/header-rows`/`header-columns`, or `table/tagging=div` for layout grids — **A-TABLE-TH** |
 | "text with insufficient contrast" | saturated emphasis colours are <4.5:1 on white | darken the palette *and* the raw `\color{red}` sites — **A-CONTRAST** |
-| *(no complaint at all)* | `tikzpicture`/`pgfplots`/`\input{…pdf_t}` figures are absent from the tag tree, so there is nothing for a checker to object to | wrap each in `altfigure` — **A-TIKZ-ALT**, found by `alt_text_audit.py`, not by a checker |
+| *(no complaint at all)* | `tikzpicture`/`pgfplots`/`\input{…pdf_t}` figures are absent from the tag tree, so there is nothing for a checker to object to | `\begin{tikzpicture}[alt=…]` for pictures; `\altinput` for inputted figures — **A-TIKZ-ALT**, found by `alt_text_audit.py`, not by a checker |
 
 The first two are one-line preamble fixes that solve the whole course at once — **apply them
 in Step 1 and save yourself the round trip.** The last two need per-deck work.

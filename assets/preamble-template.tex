@@ -10,19 +10,22 @@
 %%    visual style is driven by the kernel template system via \EditInstance.
 
 %% ---------------------------------------------------------------------------
-%% Accessibility: two lines that a PDF/UA checker will otherwise reject every
-%% deck in the course over. Both are pure tagging — no visual change at all.
-%% See references/compromises.md A-HEADINGS and A-MATHALT.
+%% Accessibility: one line that a PDF/UA checker will otherwise reject every
+%% deck in the course over. Pure tagging — no visual change at all.
+%% See references/compromises.md A-HEADINGS.
 %%
 %%  * ltx-talk hard-codes frametitle -> H4, while \section is H1, so the first
 %%    heading in a deck is an orphan H4 ("headings do not begin at level one").
 %%    H2 sits directly under the section H1.
-%%  * math/alt/use puts an /Alt on every Formula element. Without it a checker
-%%    reports inline maths as an image with no description. It is switched on
-%%    automatically for pdfstandard=ua-1, but NOT for ua-2.
 %% ---------------------------------------------------------------------------
 \tagpdfsetup{role/new-tag = frametitle / H2}
-\tagpdfsetup{math/alt/use}
+
+%% Do NOT add \tagpdfsetup{math/alt/use} here. It puts an /Alt on every Formula
+%% element, and a screen reader that finds /Alt reads it INSTEAD of the MathML,
+%% which is the accessible representation of maths under PDF/UA-2. The kernel
+%% leaves this switch off for ua-2 deliberately (it is auto-on for ua-1 only) --
+%% that is the correct behaviour, not an oversight to work around. A validator
+%% that demands /Alt on Formula is testing against ua-1. See A-MATHALT.
 
 %% ---------------------------------------------------------------------------
 %% Colours
@@ -244,18 +247,23 @@
 %% and \equal cannot cope with a nested \Call in #2. Always emit parentheses.
 \algrenewcommand\Call[2]{\textproc{#1}(#2)}
 
-%% A-TIKZ-ALT: a tikzpicture, a pgfplots axis, or an \input of a generated figure
-%% (xfig .pdf_t, .pspdftex, .pgf) produces NO warning and lands with no /Alt and
-%% no Figure tag at all -- it is missing from the tag tree, not merely undescribed.
-%% Wrap each one at the call site: \begin{altfigure}{<description>} ... \end{altfigure}.
-%% An environment, not a two-argument command, because TikZ bodies are long and
-%% brace-matching a whole picture as a macro argument is fragile.
-%% Keep this definition in sync everywhere a deck might see it: if a deck still
-%% dual-compiles under plain Beamer, its preamble needs the same environment name
-%% as a no-op (\newenvironment{altfigure}[1]{}{}), or it stops compiling there.
-\newenvironment{altfigure}[1]
-  {\tagstructbegin{tag=Figure,alt={#1}}\tagmcbegin{}}
-  {\tagmcend\tagstructend}
+%% A-TIKZ-ALT: an \input of a generated figure (xfig .pdf_t, .pspdftex, .pgf)
+%% produces NO warning and lands with no usable /Alt -- it is missing from the
+%% alt-text debt rather than listed as missing, because the \includegraphics is
+%% in a separate, generated file that no linter over the deck sources ever sees.
+%%
+%% For a tikzpicture or a pgfplots axis you do NOT need any of this: use the
+%% alt key on the environment itself, which latex-lab provides --
+%%   \begin{tikzpicture}[alt=A square joined to a circle by an arrow.]
+%%
+%% For the inputted-figure case there is no such option, so set the same
+%% latex-lab key at the call site and let the \includegraphics inside pick it up:
+%%   \altinput{A generated diagram showing a labelled box.}{fig.pdf_t}
+%% Do not edit the .pdf_t to add alt= -- xfig regenerates it.
+\ExplSyntaxOn
+\NewDocumentCommand{\altinput}{ m m }
+  { \group_begin: \keys_set:nn { tag / graphic } { alt = {#1} } \input{#2} \group_end: }
+\ExplSyntaxOff
 
 %% C-FRAMESUBTITLE: \framesubtitle is accepted by ltx-talk 0.5.3 and typesets
 %% NOTHING -- the class declares, sets and clears \g__talk_frame_subtitle_tl but

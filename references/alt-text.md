@@ -64,19 +64,28 @@ absent from the reading order rather than badly described, so nothing in the log
 in a PDF/UA checker, and nothing in the count above will tell you it is there. The audit
 reports these separately as `untagged_figure`.
 
-Wrap each one at the point of use:
+Describe each one at the point of use. For a `tikzpicture` or a `pgfplots` `axis`, the
+environment takes an `alt` key directly — no wrapper needed:
 
 ```latex
-\begin{altfigure}{Utility plotted against money: a concave curve, so the utility of the
-average exceeds the average of the utilities.}
-\begin{tikzpicture} … \end{tikzpicture}
-\end{altfigure}
+\begin{tikzpicture}[alt=Utility plotted against money: a concave curve, so the utility of
+the average exceeds the average of the utilities.]
+  …
+\end{tikzpicture}
+```
+
+For an `\input{…}` of a generated figure there is no environment to key, so set the same
+key at the call site (see **A-TIKZ-ALT** for the `\altinput` definition):
+
+```latex
+\altinput{Utility plotted against money: a concave curve.}{utility.pdf_t}
 ```
 
 Three things to get right:
 
-- **`alt_text_apply.py` cannot do this for you.** There is no optional argument to inject;
-  wrapping is a structural edit. The script skips these entries and says so.
+- **`alt_text_apply.py` cannot do this for you.** The `alt` key goes in an optional argument
+  the script does not know how to target, and `\altinput` changes the call itself. The script
+  skips these entries and says so.
 - **There is no `preview_png`** — the figure only exists once TeX has drawn it. Read the
   corresponding page of the **built PDF** instead, and apply the same rule as always: look
   at the figure before describing it.

@@ -983,23 +983,42 @@ why they are absent from the upstream quick-start docs.
 
 ---
 
-## A-MATHALT — inline maths is reported as an undescribed image
+## A-MATHALT — a checker calls maths "an undescribed image"; do NOT add `/Alt`  ⚠ the obvious fix is harmful
 
 - **Symptom:** the checker lists *"images without a description"* and points at slides whose
-  only "images" are `$x^2$`, `$\approx$`, a `$$…$$`. Confusing, because every
+  only "images" are `$x^2$`, `$\approx$`, a display. Confusing, because every
   `\includegraphics` already has `alt=`.
-- **Cause:** each maths group becomes a `/S /Formula` element, and PDF/UA wants `/Alt` on it.
-  `latex-lab` will supply one from the TeX source, but the switch is off by default:
-  `math/alt/use` is auto-enabled for `pdfstandard=ua-1` **only**, and stays off for `ua-2`
-  (`latex-lab-math.ltx`, the `begindocument/end` hook).
-- **Workaround:** `\tagpdfsetup{math/alt/use}` in the shared preamble. Every `Formula` then
-  carries an `/Alt` derived from the source ("LaTeX formula starts \begin {math} A \end
-  {math} LaTeX formula ends"). Verbose, but valid, and it costs one line.
-- **Caveat:** this is a *floor*, not good alt text. For a deck built around a handful of
-  important equations, write real descriptions; the auto text is right for the long tail
-  of stray `$n$`s.
+- **Cause: the checker, not the PDF.** Each maths group becomes a `/S /Formula`. PDF/UA-**1**
+  wants `/Alt` on it; PDF/UA-**2** wants **MathML**, which is what LaTeX emits. A validator
+  reporting this against a ua-2 document is applying a ua-1 rule.
+- ⚠ **Do NOT "fix" it with `\tagpdfsetup{math/alt/use}`.** That switch exists, it silences the
+  complaint, and it makes the document *less* accessible: a screen reader that finds `/Alt`
+  reads that string instead of parsing the MathML with MathCat. You trade a real, navigable
+  formula for `"LaTeX formula starts \begin {math} A \end {math} LaTeX formula ends"`.
+  `latex-lab` auto-enables it for `ua-1` and leaves it off for `ua-2` **on purpose**
+  (`latex-lab-math.ltx`, the `begindocument/end` hook). That default is correct; earlier
+  versions of this catalogue told you to override it, which was wrong.
+- **What to do instead:** nothing in the source. Verify the MathML is actually there, and
+  validate against ua-2 rather than ua-1.
+- **Measured (ltx-talk 0.6.0, TeX Live 2026)** — one frame, `\[ f(x)=\sum_{i=1}^{n}a_ix^i \]`,
+  three passes, `qpdf --qdf` then grep:
+
+  | | `<math>` | `/Alt` | `/AF` |
+  |---|---|---|---|
+  | default (correct) | 1 | 0 | 6 |
+  | `math/alt/use` | 1 | **1** | 6 |
+
+  Note the MathML is **not removed** by the switch — both files contain it. The harm is in
+  consumption: the `/Alt` shadows it for the screen reader. That last step is upstream's
+  account (ltx-talk issue #17), not something this catalogue has measured directly.
+- ⚠ **MathML is LuaTeX-only.** Under XeTeX and pdfTeX there is no MathML *and*, with this
+  switch correctly off, no `/Alt` either — the `Formula` elements are empty and the maths has
+  **no accessible representation at all**. Removing `math/alt/use` therefore makes LuaLaTeX a
+  hard requirement rather than a preference. See **C-PDFTEX-MATH**.
 - **Check:** `grep -c 'Alternative text for graphic is missing' deck.log` covers **graphics
-  only** and will not catch this. Look for `/Alt` on `/S /Formula` in the PDF instead.
+  only** and will not catch anything here. Look for `<math` in `qpdf --qdf` output instead —
+  that is the thing that must be present.
+- **Revisit when:** validators catch up to PDF/UA-2. The document is already right.
 
 ---
 
@@ -1127,29 +1146,43 @@ why they are absent from the upstream quick-start docs.
   A linter that greps deck sources never sees that `\includegraphics`, so the figure is
   absent from the alt-text debt rather than listed as missing. Do not "fix" it by editing the
   `.pdf_t`, which is a generated artefact that xfig will overwrite. Wrap at the call site.
-- **Workaround:** an `altfigure` environment in the shared preamble, wrapping anything that
-  draws and is not an `\includegraphics`:
+- **Workaround for a `tikzpicture` or `pgfplots` axis: none needed.** `latex-lab` provides an
+  `alt` key on the environment itself, so the picture describes itself in place:
   ```latex
-  \newenvironment{altfigure}[1]
-    {\tagstructbegin{tag=Figure,alt={#1}}\tagmcbegin{}}
-    {\tagmcend\tagstructend}
+  \begin{tikzpicture}[alt=A square joined to a circle by an arrow.]
+  ```
+  This sets the `graphic/begin` socket to the `alt` plug (`latex-lab-testphase-graphic.sty`);
+  the default plug is `text`, which tags node content as marked content and produces no
+  description. Verified on ltx-talk 0.6.0: `/S /Figure` with the exact `/Alt`, 0 errors.
+  Earlier versions of this catalogue prescribed a bespoke `altfigure` wrapper here; that was
+  unnecessary, and upstream said so (ltx-talk issue #17).
+- **Workaround for an inputted figure (`.pdf_t`, `.pspdftex`, `.pgf`):** there is no
+  environment to key, so set the same `latex-lab` key at the call site and let the
+  `\includegraphics` *inside* the generated file pick it up:
+  ```latex
+  \ExplSyntaxOn
+  \NewDocumentCommand{\altinput}{ m m }
+    { \group_begin: \keys_set:nn { tag / graphic } { alt = {#1} } \input{#2} \group_end: }
+  \ExplSyntaxOff
   ```
   ```latex
-  \begin{altfigure}{A square joined to a circle by an arrow.}
-  \begin{tikzpicture} … \end{tikzpicture}
-  \end{altfigure}
+  \altinput{A generated diagram showing a labelled box.}{fig.pdf_t}
   ```
-  An **environment, not a two-argument command**: TikZ bodies are long, and brace-matching a
-  whole picture as a macro argument is fragile.
-- **Beamer side:** add `\newenvironment{altfigure}[1]{}{}` to the Beamer preamble in the same
-  change, or the deck stops compiling as Beamer. It is inert there, like every other
-  preserved tagging declaration.
-- **Verified** by wrapping 19 real figures (2 `.pdf_t`, 17 `pgfplots`) across three decks:
-  page counts **identical** to baseline (79/89/86), 0 tagpdf errors, `/S /Figure` carrying a
-  real `/Alt` on every one. It adds no vertical space and disturbs no overlay.
-- **Expect one oddity:** inside a `.pdf_t`, the inner LaTeX `picture` environment picks up its
-  own auto `/Alt` of `"picture environment"`, nested inside your `Figure`. Harmless, but the
-  tag tree for those figures is a level deeper than the others.
+  Do **not** edit the `.pdf_t` to add `alt=` — xfig regenerates it.
+- **Why the key beats the old `altfigure` wrapper here.** Measured on the same inputted figure:
+
+  | | `/Alt` entries | `/Figure` elements | junk alt |
+  |---|---|---|---|
+  | `altfigure` | 3 | 5 | `"picture environment"` ×2 |
+  | `\altinput` | 2 | 4 | none |
+
+  The wrapper let the inner `picture` environments claim their own placeholder `/Alt` of
+  `"picture environment"` *inside* your `Figure`. Setting the key suppresses that. The real
+  description is still applied twice (once per `picture`), which is untidy but not misleading.
+- **Beamer side:** `\altinput` is ltx-talk-only. If the deck still dual-compiles, give the
+  Beamer preamble `\newcommand{\altinput}[2]{\input{#2}}`. The `alt` key on `tikzpicture` is
+  ignored harmlessly by Beamer, so it needs nothing.
+
 - **Check:** `alt_text_audit.py` reports these as `untagged_figure` findings. They cannot be
   auto-fixed the way an optional argument can, so they belong on the manual worklist.
 
