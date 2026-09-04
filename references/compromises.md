@@ -229,6 +229,63 @@ why they are absent from the upstream quick-start docs.
 - **Revisit when:** ltx-talk starts erroring clearly on a missing `\DocumentMetadata` instead
   of half-loading.
 
+## C-ONEPASS — a non-halting error caps the build at one pass  ⚠ silent, damage shows up elsewhere
+
+- **Symptom:** an error you were about to dismiss as cosmetic — most often
+  `! LaTeX Error: Command \foo already defined.` — quietly costs you every construct that
+  needs a converged multi-pass build. Cross-references render as `??`, `remember picture`
+  tikz anchors never resolve, TOC data stays stale, and MathML on formulas is absent. The
+  damage appears **nowhere near the error**, and often in a different file.
+- **Cause:** `-interaction=nonstopmode` keeps TeX going, so the run "succeeds" — but `latexmk`
+  sees a non-zero outcome and stops:
+
+  ```
+  Latexmk: Errors, so I did not complete making targets
+  ```
+
+  One pass. Everything that resolves on pass 2 or 3 is silently left unresolved.
+- **Reproduction** (ltx-talk 0.6.0, TeX Live 2026):
+
+  ```latex
+  \DocumentMetadata{lang=en, pdfversion=2.0, tagging=on}
+  \documentclass{ltx-talk}
+  \newcommand\mapsfrom{\mathrel{\reflectbox{\ensuremath{\mapsto}}}}
+  \begin{document}
+  \begin{frame}\frametitle{Clash}
+  Ref to a later page: \pageref{last}.
+  \end{frame}
+  \begin{frame}\frametitle{Second}\label{last}
+  Second.
+  \end{frame}
+  \end{document}
+  ```
+
+  | | `latexmk` exit | passes | `\pageref` renders |
+  |---|---|---|---|
+  | `\newcommand\mapsfrom` | 12 | **1** | **`??`** |
+  | `\providecommand\mapsfrom` | 0 | 3 | `2` |
+
+  Nothing else changed. The maths renders identically in both.
+- **Why this bites converted decks specifically:** a course preamble that predefines maths
+  symbols (`\newcommand\mapsfrom{…}` in a shared `ai-symbols.tex`) is fine under
+  Beamer/pdfTeX, where nothing defines them. Under ltx-talk with LuaTeX, `unicode-math`
+  already provides them and `\newcommand` refuses. On one real 20-deck course this fired in
+  **20 of 20 decks**, and **0 of 20** Beamer baselines.
+- **Workaround:** `\providecommand` for any symbol a full `unicode-math` stack might already
+  supply. For the general case: fix the error. There is no such thing as an error worth
+  leaving in a deck you intend to verify.
+- **Detect:** the deck's own `.log` says whether the build converged. After `latexmk` finishes:
+  ```sh
+  grep -c 'Latexmk: Errors' build.log                            # latexmk gave up
+  grep -ciE 'Rerun to get|Label\(s\) may have changed' deck.log   # did NOT converge
+  grep -c 'There were undefined references' deck.log              # refs unresolved
+  ```
+  All three must be 0. **Not lint-detectable:** the offending `\newcommand` usually lives in
+  an `\input`-ed shared preamble, which `convert_deck.py --lint` does not read.
+- ⚠ **"It produced a PDF with the right page count" is not evidence of a sound build.** The
+  broken build above emits a correct-looking, correctly-paginated, `Tagged: yes` PDF.
+- **Revisit when:** n/a — this is `latexmk` behaving correctly. The fix is to have no errors.
+
 ## C-AND-TITLE — `\and` in a custom title page detonates  ⚠ 101 errors, none near the fault
 
 - **Symptom:** `! Misplaced \crcr.` (inside `\tbl_crcr:n`), `! Missing } inserted`,
