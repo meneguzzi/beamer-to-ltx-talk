@@ -315,17 +315,26 @@ Then triage against `references/compromises.md`. The signatures you will most li
 
 Iterate until `latexmk` exits 0.
 
+> ⚠ **Fix every `!` error, including the ones that look cosmetic.** Under
+> `-interaction=nonstopmode` a non-halting error still makes `latexmk` stop after **one pass**
+> (`Latexmk: Errors, so I did not complete making targets`), so everything that resolves on a
+> later pass silently does not: cross-references render as `??`, `remember picture` anchors
+> never resolve, MathML on formulas is absent. The damage surfaces far from the error, often
+> in another file. `! Command \foo already defined` from a course preamble that predefines
+> maths symbols is the usual culprit — use `\providecommand`. See **C-ONEPASS**.
+
 ---
 
 ## Step 4 — Verify (don't trust "it compiled")
 
-For each converted deck confirm **all five** — the third and fourth have no error message and
-are the ones people miss:
+For each converted deck confirm **all six** — the third, fourth and fifth have no error message
+and are the ones people miss:
 ```sh
 pdfinfo deck.pdf | grep -E 'Pages|Tagged'                  # Tagged: yes, pages == baseline
 grep -c 'tagpdf Error' deck.log                            # must be 0 (Warnings are OK)
 grep -nE '^\s*\\begin\{frame\}(<[^>]*>)?(\[[^]]*\])?\{' deck.tex     # must be EMPTY: title-less frames
 pdftotext deck.pdf - | grep -n '[a-z]; [a-z]'              # must be EMPTY: pdfTeX maths corruption
+grep -ciE 'Rerun to get|Label\(s\) may have changed' deck.log       # must be 0: build converged
 grep -c 'Alternative text for graphic is missing' deck.log # -> 0 after Step 6
 pdftoppm -png -r 70 -f 1 -l 4 deck.pdf /tmp/new            # eyeball title/heading/columns
 ```
@@ -337,6 +346,10 @@ pdftoppm -png -r 70 -f 1 -l 4 deck.pdf /tmp/new            # eyeball title/headi
 - **No corrupted maths in the text layer.** A hit on that `grep` means the deck was built with
   pdfTeX; rebuild with `-lualatex` (**C-PDFTEX-MATH**). `pdfinfo deck.pdf | grep Producer`
   confirms which engine produced a given PDF.
+- **The build converged.** A surviving `Rerun to get…` / `Label(s) may have changed` means
+  `latexmk` stopped early — almost always because a non-halting `!` error made it give up after
+  one pass, leaving cross-references as `??` and `remember picture` anchors unresolved
+  (**C-ONEPASS**). Page count and `Tagged: yes` both pass while this is true.
 - Spot-check the title page, a section divider, a columns/figure frame, and an algorithm
   frame against the reference renders.
 
