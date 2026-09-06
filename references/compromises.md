@@ -229,6 +229,41 @@ why they are absent from the upstream quick-start docs.
 - **Revisit when:** ltx-talk starts erroring clearly on a missing `\DocumentMetadata` instead
   of half-loading.
 
+## C-NO-UA2 — `pdfstandard=a-4` alone declares no PDF/UA conformance  ⚠ silent, and it undermines A-MATHALT
+
+- **Symptom:** the deck compiles, is `Tagged: yes`, and looks accessible — but
+  `verapdf -f ua2` fails it on **clause 5** ("the PDF/UA version of a file shall be specified
+  … using the PDF/UA identification schema") and on clause 8.11.2 (`DisplayDocTitle`). Nothing
+  in the log mentions either. Worse, an institutional checker that sees no ua-2 declaration is
+  entitled to assess the file under PDF/UA-**1** — under which the (correct) MathML-only maths
+  of **A-MATHALT** *is* a failure.
+- **Cause:** `pdfstandard=a-4` is PDF/**A**-4, a preservation profile. It emits the `pdfuaid`
+  XMP namespace but no `pdfuaid:part`, so the file makes no PDF/UA claim at all. The two are
+  independent: you must ask for `ua-2` explicitly.
+- **Workaround:** `\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2},
+  tagging=on}`. Adding `ua-2` also makes the kernel set `ViewerPreferences /DisplayDocTitle
+  true`, clearing clause 8.11.2 as a side effect.
+- **Measured** (ltx-talk 0.6.0, TeX Live 2026, veraPDF 1.28, `article` MWE, lualatex):
+
+  | `pdfstandard=` | `pdfuaid:part` in XMP | `verapdf -f ua2` failing clauses |
+  |---|---|---|
+  | `a-4` | *absent* | **5**, 8.11.2, 8.11.1 |
+  | `{a-4,ua-2}` | `part=2, rev=2024` | 8.11.1 only |
+
+  The residual 8.11.1 is `dc:title` — the MWE has no `\title`. Adding `\title{T}` gives a clean
+  `PASS`, and `\title` alone is enough: it does **not** need `\maketitle`, so a deck using the
+  hand-rolled **C-TITLEPAGE** frame still satisfies it as long as `\title` is kept.
+- **Detect before compiling:** `convert_deck.py` warns (`C-NO-UA2`) during both `--lint` and
+  conversion when a literal `\DocumentMetadata` in *this file* sets `pdfstandard=` without
+  `ua-2`. ⚠ It cannot follow `\input`, so the common layout — metadata in a shared
+  `tag-commands.tex` — is invisible to it. Check that file by hand, or check the artefact:
+
+  ```sh
+  qpdf --qdf --object-streams=disable deck.pdf - | strings | grep -c 'pdfuaid:part'   # want >= 1
+  ```
+- **Revisit when:** ltx-talk or latex-lab starts defaulting `pdfstandard` to include a PDF/UA
+  level, or warns when tagging is on but no PDF/UA conformance is declared.
+
 ## C-ONEPASS — a non-halting error caps the build at one pass  ⚠ silent, damage shows up elsewhere
 
 - **Symptom:** an error you were about to dismiss as cosmetic — most often
@@ -1226,6 +1261,7 @@ why they are absent from the upstream quick-start docs.
 > | `\center{…}` used as a command | tag tree corrupts; error lands **far away**, or in another frame | C-CENTER-ARG |
 > | `\framesubtitle{…}` | text **never typeset**; page count unchanged, so every check passes | C-FRAMESUBTITLE |
 > | `$$…$$` display math | every `\item` **after** it loses its list indent | C-DISPLAY-DOLLAR |
+> | `pdfstandard=` without `ua-2` | PDF declares **no PDF/UA conformance**; veraPDF fails ua2 clause 5 | C-NO-UA2 |
 > | `\includegraphics` without `alt=` | screen reader reads out **the filename** | see `alt-text.md` |
 >
 >
