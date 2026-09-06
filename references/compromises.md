@@ -989,15 +989,41 @@ why they are absent from the upstream quick-start docs.
   only "images" are `$x^2$`, `$\approx$`, a display. Confusing, because every
   `\includegraphics` already has `alt=`.
 - **Cause: the checker, not the PDF.** Each maths group becomes a `/S /Formula`. PDF/UA-**1**
-  wants `/Alt` on it; PDF/UA-**2** wants **MathML**, which is what LaTeX emits. A validator
-  reporting this against a ua-2 document is applying a ua-1 rule.
-- ⚠ **Do NOT "fix" it with `\tagpdfsetup{math/alt/use}`.** That switch exists, it silences the
-  complaint, and it makes the document *less* accessible: a screen reader that finds `/Alt`
-  reads that string instead of parsing the MathML with MathCat. You trade a real, navigable
-  formula for `"LaTeX formula starts \begin {math} A \end {math} LaTeX formula ends"`.
-  `latex-lab` auto-enables it for `ua-1` and leaves it off for `ua-2` **on purpose**
-  (`latex-lab-math.ltx`, the `begindocument/end` hook). That default is correct; earlier
-  versions of this catalogue told you to override it, which was wrong.
+  wants `/Alt` on it; PDF/UA-**2** also accepts **MathML**, which is what LaTeX emits. A
+  validator reporting this against a ua-2 document is applying a ua-1 rule.
+- ⚠ **Do NOT "fix" it with `\tagpdfsetup{math/alt/use}`.** Not because it is invalid —
+  ua-2 permits `/Alt` on a `Formula`, so a document carrying it still conforms — but because
+  it is *much worse in practice*. Both routes pass a validator; only one is usable. A screen
+  reader that finds `/Alt` is reported to read that string instead of parsing the MathML with
+  MathCat, so you trade a navigable formula for
+  `"LaTeX formula starts \begin {math} A \end {math} LaTeX formula ends"`.
+  `latex-lab` auto-enables the switch for `ua-1` and leaves it off for `ua-2`
+  (`latex-lab-math.ltx`, the `begindocument/end` hook). Earlier versions of this catalogue
+  told you to override that default, which was wrong.
+- ⚠ **The screen-reader claim is second-hand and unverified — by us and by upstream.** It comes
+  from ltx-talk issue #17; the person reporting it says plainly that they cannot test it,
+  because proper screen-reader support for maths is currently Windows-only. What *is*
+  measured is everything below: both representations are present in the file, and the `/Alt`
+  is the one a reader is said to prefer. If you can test with a Windows screen reader, that
+  would settle it — and is worth reporting back upstream either way.
+- **Not pursued: a per-formula, human-written `/Alt`.** The obvious wish is a
+  `\altmath{a polynomial of degree n}{f(x)=\sum…}` — a real sentence rather than source read
+  aloud. latex-lab *does* pass `alt = \l__math_content_alt_tl` to `\tag_struct_begin:n` for
+  every `Formula`, filled from `\l__math_content_template_tl` (the `LaTeX~formula~starts~…`
+  boilerplate), so the slot exists. Three routes, none taken:
+  1. set the private `\l__math_content_alt_tl` directly — works until latex-lab's own plug
+     overwrites it, i.e. the `\g__talk_frame_subtitle_tl` trap in **C-FRAMESUBTITLE** again;
+  2. define a custom plug for the `math/content` socket — the *supported* extension point
+     (same socket/plug layer as the `tikzpicture` `alt` key), and the right way if it is ever
+     wanted;
+  3. MathML `intent` attributes (`latex-lab-mathintent.ltx`, v0.1c) — semantically correct
+     and it enriches the MathML instead of competing with it, but LuaTeX-only and it annotates
+     *nodes*, not whole formulas.
+
+  Deliberately deferred: MathML already reads the maths correctly, and a hand-written `/Alt`
+  would plausibly shadow it exactly as the generated one does — which would have to be settled
+  upstream before any of this is worth building. Revisit only if a public per-formula interface
+  appears, or if the shadowing claim is disproved.
 - **What to do instead:** nothing in the source. Verify the MathML is actually there, and
   validate against ua-2 rather than ua-1.
 - **Measured (ltx-talk 0.6.0, TeX Live 2026)** — one frame, `\[ f(x)=\sum_{i=1}^{n}a_ix^i \]`,

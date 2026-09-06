@@ -189,10 +189,11 @@ at level one" — even though the compile is clean and the output says `Tagged: 
 (**A-HEADINGS**).
 
 > ⚠ **Do not add `\tagpdfsetup{math/alt/use}`.** It is tempting, because a checker will report
-> your maths as "images without a description" without it. But it puts an `/Alt` on every
-> `Formula`, and a screen reader that finds `/Alt` reads that *instead of* the MathML — which
-> is the accessible representation of maths under PDF/UA-2. The kernel leaves the switch off
-> for ua-2 on purpose. See **A-MATHALT**.
+> your maths as "images without a description" without it. It puts an `/Alt` on every
+> `Formula`, which is *valid* under ua-2 — and much worse in practice, because a screen reader
+> that finds `/Alt` is reported to read that string instead of the MathML. Both pass a
+> validator; only one is usable. See **A-MATHALT**, including what is and is not verified.
+
 While you are in `\coursetitlepage`, tag the deck title as the document's `H1`; nothing else
 in a deck is one. See Step 6b.
 
