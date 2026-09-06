@@ -135,7 +135,7 @@ every image described) and are found only by running a real PDF/UA checker (**St
 | ID | Silent failure | Fix |
 |---|---|---|
 | **A-HEADINGS** | ltx-talk roles `frametitle` to `H4` and nothing is an `H1` → "headings do not begin at level one" | `role/new-tag = frametitle / H2`, tag the deck title `H1` |
-| **A-MATHALT** | `Formula` elements carry no `/Alt` → maths reported as undescribed images | `\tagpdfsetup{math/alt/use}` |
+| **A-MATHALT** | a checker reports maths as undescribed images — but it is applying a PDF/UA-**1** rule; under ua-2 maths is made accessible by MathML | **do nothing.** Do *not* set `\tagpdfsetup{math/alt/use}`: the `/Alt` shadows the MathML for screen readers. Validate with `verapdf -f ua2` |
 | **A-TABLE-TH** | Every `tabular` is a `Table` with no `TH`, layout grids included, and the settings **leak** between tables | State all three keys per table (`table/tagging=…,header-rows=…,header-columns=…`), or `table/tagging=div`; `table_audit.py` |
 | **A-CONTRAST** | Saturated emphasis colours are <4.5:1 on white | Darken the palette **and** the raw `\color{red}` sites |
 
