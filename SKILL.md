@@ -243,8 +243,9 @@ patterns, never content. It performs:
 | Transform | From | To | Note |
 |---|---|---|---|
 | Class line | `\documentclass[…]{beamer}` | `\documentclass[…]{ltx-talk}` | |
+| Frame options | `\begin{frame}[b]` | `\begin{frame}[vertical-alignment=bottom]` | C-FRAME-OPT — ltx-talk's `frame` takes a key-value list, so `b`/`t`/`c` are discarded whole and the frame renders centred. Also `allowframebreaks` → `auto-break=true` |
 | Frame titles | `\begin{frame}[opts]{Title}` | `\begin{frame}[opts]` + `\frametitle{Title}` | braced titles otherwise render as **body text** |
-| Empty titles | `\begin{frame}[c]{}` | `\begin{frame}[c]` | drops the stray group |
+| Empty titles | `\begin{frame}[c]{}` | `\begin{frame}[vertical-alignment=center]` | drops the stray group |
 | Double titles | `\begin{frame}{A}{B}` | `\frametitle{A --- B}` | Beamer subtitle → folded in; **warns** |
 | Sections | *(left as-is)* | *(left as-is)* | the preamble's redefined `\section` emits the divider; the script only strips `\AtBeginSection` and **warns** the TOC outline is lost |
 | Centring | `\center{X}` | `\begin{center}X\end{center}` | C-CENTER-ARG — a declaration, not a command; fatal under tagging |
@@ -301,7 +302,8 @@ to zero before spending a compile.
 It flags: unconverted braced frame titles (C-FRAMETITLE / C-FRAMETITLE-NESTED), `\center{…}`
 and friends (C-CENTER-ARG), `\State<n>` silent overlays (C-OVERLAY-ALGO), `\framesubtitle`
 (C-FRAMESUBTITLE — accepted by the class and never typeset), raw `$$…$$`
-(C-DISPLAY-DOLLAR — outdents every later `\item`), leftover
+(C-DISPLAY-DOLLAR — outdents every later `\item`), bare Beamer frame options
+(C-FRAME-OPT — `[b]`/`[t]` discarded, so the frame renders centred), leftover
 `\tableofcontents` (C-TOC), Beamer-only commands (C-NOBEAMER, C-BACKGROUND), `algpseudocodex`
 (C-ALGO), and the `algorithm` float (C-ALGO-FLOAT).
 

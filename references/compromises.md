@@ -110,6 +110,98 @@ why they are absent from the upstream quick-start docs.
   ```
 - **Revisit when:** `convert_deck.py` grows a brace matcher of its own.
 
+## C-FRAME-OPT — every bare Beamer frame option is discarded  ⚠ silent; `[b]`/`[t]` become centred
+
+- **Symptom: none.** `\begin{frame}[b]` compiles, page count matches, `Tagged: yes`. The
+  content is just in the wrong place — bottom- and top-aligned frames come out centred.
+  `pdftotext` does not see it either: identical on an MWE, and on a real deck the same words
+  come back regrouped into different lines, which reads as extraction noise.
+- **Cause:** ltx-talk's `frame` takes a **key–value** list, not Beamer's positional letters:
+  `\keys_set:nn { talk / frame } {#2}`. Its keys are `action-spec`, `auto-break`,
+  `auto-break-coverage`, `label`, `name`, `supplementary-frame`, `tag-slides`,
+  `vertical-alignment` (`bottom`/`center`/`stretch`/`top`, default `center`). A bare word is
+  none of these. **Observed, not traced through the code: the list is parsed only if it
+  contains an `=`.** Defining the missing key does not rescue it (see below), so this is not
+  key lookup failing — the list never reaches it. It is not about the word. Bare `auto-break`, a key the class really does
+  have, is discarded exactly like bare `b` — measured on one over-long frame, `[auto-break]`
+  gives 2 pages and `[auto-break=true]` gives 1.
+- **Workaround:** name the key. The mapping is total, so `convert_deck.py` applies it:
+
+  | Beamer | ltx-talk | note |
+  |---|---|---|
+  | `[b]` | `vertical-alignment=bottom` | **confirmed by measurement** |
+  | `[t]` | `vertical-alignment=top` | same |
+  | `[c]` | `vertical-alignment=center` | inert — already the default; rewritten so the source says what the class reads |
+  | `[allowframebreaks]` | `auto-break=true` | not `auto-break` |
+  | `[label=x]` | `label=x` | genuine key; the one Beamer option that survives untouched |
+  | `[containsverbatim]`, `[fragile]` | — | verbatim goes through `frame*`, not a frame option (**C-VERBATIM**) |
+  | `[plain]`, `[shrink]`, `[squeeze]`, `[noframenumbering]` | — | no key at all; delete or reimplement |
+- **Measured** (ltx-talk 0.6.0, TeX Live 2026, lualatex, `pdftotext -bbox` `yMin` of the body
+  text on a one-frame MWE):
+
+  | frame options | `yMin` |
+  |---|---|
+  | none, `[b]`, `[t]` | 135.76 — all three identical, i.e. centred |
+  | `[vertical-alignment=bottom]` | 247.96 |
+  | `[vertical-alignment=top]`, `[…=stretch]` | 23.57 |
+- **The silence is conditional, and that is the nasty part.** A lone bare word, or a list of
+  nothing but bare words, is thrown away without a word. Put *any* `key=value` in the same
+  list and every bare word in it becomes a hard `! LaTeX Error: The key 'talk/frame/b' is
+  unknown` that stops the build. So `[b]` is silent, `[b,label=x]` is loud, and converting
+  `[t,fragile]` turns a working deck into a failing one — `convert_deck.py` warns when it
+  leaves such a word behind.
+- **It cannot be fixed from the preamble.** Defining `b`/`t`/`c` as real keys in the class's
+  own family —
+
+  ```latex
+  \ExplSyntaxOn
+  \keys_define:nn { talk / frame }
+    { b .meta:n = { vertical-alignment = bottom } , b .value_forbidden:n = true }
+  \ExplSyntaxOff
+  ```
+
+  — does **not** work. `[b]` still comes out centred (`yMin` 135.76); `[b,name=zz]` moves to
+  247.96. The key exists and is still ignored, because the list is never parsed. `\let` and
+  friends cannot help either: the option list is grabbed by `\begin{frame}`'s own argument
+  spec. The only preamble-side fix is to `\RenewDocumentEnvironment{frame}` outright, which
+  means re-implementing the class's definition — it branches on `frame-title-arg` and calls
+  the private `\__talk_frame_process:nn` — and re-doing it at every ltx-talk release. Rewrite
+  the source instead.
+- **Not backwards compatible with Beamer, but loudly so.** `\begin{frame}[vertical-alignment=bottom]`
+  under `\documentclass{beamer}` gives `! Package keyval Error: vertical-alignment undefined`
+  and exit 1. A deck that must still build both ways needs four lines on the Beamer side:
+
+  ```latex
+  \makeatletter
+  \define@key{beamerframe}{vertical-alignment}[center]{\setkeys{beamerframe}{\csname beamer@va@#1\endcsname}}
+  \def\beamer@va@bottom{b}\def\beamer@va@top{t}\def\beamer@va@center{c}\def\beamer@va@stretch{s}
+  \define@key{beamerframe}{auto-break}[true]{\setkeys{beamerframe}{allowframebreaks}}
+  \makeatother
+  ```
+
+  Beamer parses its frame options with `keyval` unconditionally, so unlike ltx-talk it can be
+  taught a new key. Measured (`yMin`, same MWE under beamer): `vertical-alignment=bottom`
+  255.31 = native `[b]`; `top` 29.43; `center` 116.38 = the default. `auto-break=true` gives
+  2 pages on an over-long frame, same as `allowframebreaks`; `stretch`→`s` is written by
+  analogy and not measured.
+- **On real decks** (a 28-deck course, ltx-talk 0.6.0, lualatex). Every deck converted with
+  no leftover bare option anywhere. Two rebuilt and compared against their own pre-rewrite
+  build:
+
+  | deck | options rewritten | pages before → after | result |
+  |---|---|---|---|
+  | the one with the `[b]` frame | 23 | 72 → 72 | exit 0, `Tagged: yes`, same words; the `[b]` frame's body moved from `yMin` 128.32 to 185.08 |
+  | the one with 3 `[t]` frames | 39 | 60 → 60 | exit 0, `Tagged: yes` |
+- **Frequency:** in the two courses converted here, the Beamer originals used only `c` (456
+  and 776), `t` (1 and 43), `b` (0 and 1) and `containsverbatim` (13 and 16). Nothing else.
+- **Detect before compiling:** `convert_deck.py --lint` reports `C-FRAME-OPT` for any frame
+  option list holding a bare item. Hand-written frames keep reintroducing them, so this is
+  the durable half of the fix.
+- **Revisit when:** ltx-talk parses its frame option list unconditionally, or errors on an
+  unknown bare word. 0.6.1's *"Refine implementation of frame property storage"* (upstream
+  #241) touches this machinery but **does not change the behaviour** — checked before it
+  reached TeX Live here.
+
 ## C-FRAMESUBTITLE — `\framesubtitle` typesets nothing  ⚠ silent, and documented upstream
 
 - **Symptom: none.** `\framesubtitle{…}` parses, absorbs its argument, and prints **nothing**.
@@ -1284,6 +1376,7 @@ why they are absent from the upstream quick-start docs.
 > | `\center{…}` used as a command | tag tree corrupts; error lands **far away**, or in another frame | C-CENTER-ARG |
 > | `\framesubtitle{…}` | text **never typeset**; page count unchanged, so every check passes | C-FRAMESUBTITLE |
 > | `$$…$$` display math | every `\item` **after** it loses its list indent | C-DISPLAY-DOLLAR |
+> | bare `[b]`/`[t]`/`[c]` frame option | discarded whole; every aligned frame renders **centred** | C-FRAME-OPT |
 > | `pdfstandard=` without `ua-2` | PDF declares **no PDF/UA conformance**; veraPDF fails ua2 clause 5 | C-NO-UA2 |
 > | `\includegraphics` without `alt=` | screen reader reads out **the filename** | see `alt-text.md` |
 >

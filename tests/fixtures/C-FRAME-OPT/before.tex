@@ -1,0 +1,16 @@
+% Beamer source: [b] pins the frame content to the bottom of the slide. Correct
+% Beamer, and it survives conversion untouched and looking right. ltx-talk's frame
+% takes a KEY-VALUE list, so a bare word is not an option at all: the whole list is
+% discarded. No error, no warning, right page count, byte-identical pdftotext -- the
+% content simply moves to the middle of the slide (C-FRAME-OPT).
+%
+% The discard is silent only while nothing in the list carries an '='. [b,label=x]
+% raises "The key 'talk/frame/b' is unknown" and stops the build.
+\documentclass{beamer}
+
+\begin{document}
+\begin{frame}[b]
+\frametitle{Pinned to the bottom}
+This paragraph sits at the foot of the slide, under the empty space.
+\end{frame}
+\end{document}
