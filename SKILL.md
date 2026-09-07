@@ -516,7 +516,10 @@ Then re-verify against the PDF structure itself, not the log:
 qpdf --qdf --object-streams=disable deck.pdf qdf.pdf
 grep -aoE '/S\s*/[A-Za-z0-9]+' qdf.pdf | tr -s ' ' | sort | uniq -c | sort -rn
 #   want: >= 1 /S /H1 ; frametitle roled one level below section ;
-#         /S /TH present wherever data tables are ; /Alt on /S /Formula
+#         /S /TH present wherever data tables are
+#   /S /Formula wants MathML, NOT /Alt -- see A-MATHALT. This grep cannot see
+#   MathML, so check it separately:
+strings qdf.pdf | grep -c '<math'          # > 0 if the deck has maths (LuaLaTeX only)
 verapdf -f ua2 --format text deck.pdf
 #   the qpdf/grep check above counts elements but can't see nesting —
 #   an H1 containing a stray Part/P (the A-HEADINGS manual-struct trap)

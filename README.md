@@ -79,7 +79,7 @@ scripts/
   alt_text_audit.py       # Lists \includegraphics missing alt= text, plus tikzpicture/
                           # pgfplots/inputted figures untagged entirely (A-TIKZ-ALT)
   alt_text_apply.py       # Writes alt= text back into the source; skips A-TIKZ-ALT findings,
-                          # which need a structural altfigure wrap done by hand
+                          # which need an alt key set by hand at the call site
   table_audit.py          # Classifies every tabular: data table (needs TH) vs
                           # layout grid (needs table/tagging=div), see A-TABLE-TH
 
@@ -126,7 +126,7 @@ Full details, including error signatures and workarounds, are in [`references/co
 | **C-NO-UA2** | `\DocumentMetadata{… pdfstandard=a-4 …}` declares PDF/**A**-4 and no PDF/UA level → the PDF makes **no PDF/UA claim** (no `pdfuaid:part`), so a checker may judge it under PDF/UA-1 | `pdfstandard={a-4,ua-2}` |
 | **C-NO-DOCMETA** | `\DocumentMetadata` shipped commented out → ltx-talk **half-loads**, cascading `Undefined control sequence` naming none of the real cause | Uncomment/add `\DocumentMetadata{…}` before `\documentclass` |
 | *(alt text)* | `\includegraphics` without `alt=` → screen reader reads out **the filename** | `alt_text_audit.py` |
-| **A-TIKZ-ALT** | `tikzpicture` / `pgfplots` / `\input{…pdf_t}` figures are untagged **entirely** — no warning, no `/Alt`, and no PDF/UA checker complains, because they are missing from the tag tree rather than wrong within it | Wrap in `altfigure`; found by `alt_text_audit.py` as `untagged_figure` |
+| **A-TIKZ-ALT** | `tikzpicture` / `pgfplots` / `\input{…pdf_t}` figures are untagged **entirely** — no warning, no `/Alt`, and no PDF/UA checker complains, because they are missing from the tag tree rather than wrong within it | `\begin{tikzpicture}[alt=…]`; `\altinput` for inputted figures; found by `alt_text_audit.py` as `untagged_figure` |
 
 ⚠ Verify overlays by **rendering pages** (`pdftoppm -f N -l N -png`), never with `pdftotext`. Hidden overlay content stays in the PDF text layer, so text extraction reports content that isn't visible on the slide. This is how C-ONSLIDE-ARG and C-OVERLAY-ALGO were actually caught.
 
@@ -177,7 +177,7 @@ The catalogue is verified across **ltx-talk 0.5.0-0.5.2** (each entry in `compro
 The whole point of this conversion is tagged, accessible PDF. Things to check after conversion:
 
 - **Alt text**: `tagpdf` warns for every `\includegraphics` without `alt={…}`. Surface the list and fill it; this is the main accessibility payload.
-- **Non-`\includegraphics` figures**: a `tikzpicture`, a `pgfplots` `axis`, or an `\input{…}` of a generated `.pdf_t`/`.pgf` produces no warning at all and lands with no `/Alt` and no `Figure` tag (**A-TIKZ-ALT**). `alt_text_audit.py` finds these as `untagged_figure`; wrap each in an `altfigure` environment by hand, since there is no attribute to inject.
+- **Non-`\includegraphics` figures**: a `tikzpicture`, a `pgfplots` `axis`, or an `\input{…}` of a generated `.pdf_t`/`.pgf` produces no warning at all and lands with no `/Alt` and no `Figure` tag (**A-TIKZ-ALT**). `alt_text_audit.py` finds these as `untagged_figure`; describe each by hand — the `alt` key on the environment for a `tikzpicture`/`axis`, `\altinput` for an inputted figure.
 - **Reading order in columns**: content is tagged in source order (left column first, then right). Write columns so left-first is the correct reading order. For paired-row content, use `tabular` instead.
 - **Block titles**: the `title=` argument of `block`/`alertblock`/`exampleblock` is tagged as plain text, not as a heading. For semantically important labels, use `\subsubsection*{}` inside the box body.
 - **Verify tagging**: `pdfinfo deck.pdf | grep Tagged` should return `yes`; `grep 'tagpdf Error' deck.log` should return 0 matches.
