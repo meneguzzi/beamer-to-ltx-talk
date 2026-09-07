@@ -212,8 +212,15 @@ Keep the `\DocumentMetadata{…}` block (it must be the very first thing, before
 `\documentclass`). **Prefer the modern `tagging=on` over the legacy `testphase={…}` list:**
 
 ```latex
-\DocumentMetadata{ lang=en, pdfversion=2.0, pdfstandard=a-4, tagging=on }
+\DocumentMetadata{ lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on }
 ```
+
+**`ua-2` is not optional.** `a-4` is PDF/A-4 and emits *no* `pdfuaid:part`: the file makes no
+PDF/UA claim, veraPDF fails it on ua2 clause 5, and a checker is then entitled to assess it
+under PDF/UA-**1** — which is the very argument **A-MATHALT** rests on. `{a-4,ua-2}` emits
+`pdfuaid:part=2, rev=2024` and also sets `/DisplayDocTitle true` (clause 8.11.2) for free.
+`convert_deck.py` warns (`C-NO-UA2`) when it can see the block — it cannot follow an
+`\input`-ed `tag-commands.tex`, so **check that file by hand** (**C-NO-UA2**).
 
 `testphase={phase-I,…}` is the old experimental opt-in and enables only the weakest phase.
 On TeX Live 2026 `tagging=on` is the supported spelling and gives fuller tagging. Verified
@@ -459,6 +466,8 @@ in Step 1 and save yourself the round trip.** The last two need per-deck work.
 > verapdf -f ua2 --format text deck.pdf     # PASS/FAIL
 > verapdf -f ua2 --format mrr  deck.pdf     # full report, per-check
 > ```
+> The `-f ua2` here and the `ua-2` in `\DocumentMetadata` must agree: validating as ua2 a
+> file that never declared ua-2 fails on clause 5 before anything else (**C-NO-UA2**).
 > Run it before calling any A-\* fix done — Blackboard passing a deck does not mean it passes
 > `ua2`. This is how the A-HEADINGS title-tagging bug below was actually found.
 

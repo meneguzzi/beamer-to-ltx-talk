@@ -425,6 +425,28 @@ def missing_documentmetadata(text: str) -> bool:
     return True
 
 
+def pdfstandard_without_ua2(text: str):
+    r"""Return the \DocumentMetadata argument if it sets pdfstandard= but not ua-2.
+
+    C-NO-UA2: pdfstandard=a-4 is PDF/A-4 and emits no pdfuaid:part at all, so the PDF
+    makes no PDF/UA claim -- a checker is then entitled to judge it under PDF/UA-1,
+    which is exactly the ua-1-vs-ua-2 argument A-MATHALT depends on. Only fires when
+    the block is literally in THIS file; a deck whose metadata lives in an \input-ed
+    tag-commands.tex is invisible here (lint does not follow \input).
+    """
+    for m in re.finditer(r'\\DocumentMetadata\s*\{', text):
+        line_start = text.rfind('\n', 0, m.start()) + 1
+        if is_comment(text[line_start:m.start()]):
+            continue
+        end = match_brace(text, m.end() - 1)
+        if end is None:
+            continue
+        arg = text[m.end():end - 1]
+        if 'pdfstandard' in arg and 'ua-2' not in arg:
+            return ' '.join(arg.split())
+    return None
+
+
 FRAME_BEGIN_RE = re.compile(r'\\begin\{frame\*?\}(?:<([^>]*)>)?')
 FRAME_END_RE = re.compile(r'\\end\{frame\*?\}')
 ONLY_OVERLAY_RE = re.compile(r'\\only\s*<([^>]*)>\s*\{')
@@ -487,6 +509,12 @@ def handout_mode_findings(text: str):
 def lint(text: str, path: str) -> int:
     """Report source-level failures the compiler stays silent about. Returns issue count."""
     hits = []
+    bad_std = pdfstandard_without_ua2(text)
+    if bad_std is not None:
+        hits.append((1, 'C-NO-UA2',
+                     'pdfstandard= is set without ua-2, so the PDF carries no pdfuaid:part '
+                     'and makes no PDF/UA claim (veraPDF ua2 clause 5). Use '
+                     'pdfstandard={a-4,ua-2}.', '\\DocumentMetadata{' + bad_std + '}'))
     if missing_documentmetadata(text):
         hits.append((1, 'C-NO-DOCMETA',
                      'no \\DocumentMetadata reached before \\documentclass (is '
@@ -563,6 +591,10 @@ def main():
                      '\\documentclass (a commented-out \\input{...tag-commands...}?). ltx-talk '
                      'half-loads without it — expect "undefined" \\institute/\\hypersetup/'
                      'frame*/\\normalsize. Uncomment the metadata input.'))
+    if pdfstandard_without_ua2(text) is not None:
+        WARN.append(('C-NO-UA2', 'The \\DocumentMetadata pdfstandard= list omits ua-2, so the '
+                     'PDF declares no PDF/UA conformance (no pdfuaid:part) and a checker may '
+                     'legitimately assess it under PDF/UA-1. Use pdfstandard={a-4,ua-2}.'))
     if re.search(r'\\begin\{algorithmic\}', text):
         WARN.append(('C-ALGO', 'Deck contains algorithms: the preamble MUST use classic '
                      'algorithmicx + algpseudocode[noend], NOT algpseudocodex, or every '

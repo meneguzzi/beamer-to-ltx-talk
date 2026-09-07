@@ -123,6 +123,7 @@ Full details, including error signatures and workarounds, are in [`references/co
 | **C-FRAMETITLE-NESTED** | Nested-brace title left unconverted → frame has **no title**, text lands in the body | Run `fix_frame_titles.py` |
 | **C-CENTER-ARG** | `\center{…}` used as a command → tag tree corrupts, error lands **far away** | `\begin{center}…\end{center}` |
 | **C-OVERLAY-ALGO** | `\State<2>` used as an overlay spec → **literal `<2>` printed on the slide**, overlay never fires | `\State \uncover<2>{…}` (not `\onslide`, see C-ONSLIDE-ARG) |
+| **C-NO-UA2** | `\DocumentMetadata{… pdfstandard=a-4 …}` declares PDF/**A**-4 and no PDF/UA level → the PDF makes **no PDF/UA claim** (no `pdfuaid:part`), so a checker may judge it under PDF/UA-1 | `pdfstandard={a-4,ua-2}` |
 | **C-NO-DOCMETA** | `\DocumentMetadata` shipped commented out → ltx-talk **half-loads**, cascading `Undefined control sequence` naming none of the real cause | Uncomment/add `\DocumentMetadata{…}` before `\documentclass` |
 | *(alt text)* | `\includegraphics` without `alt=` → screen reader reads out **the filename** | `alt_text_audit.py` |
 | **A-TIKZ-ALT** | `tikzpicture` / `pgfplots` / `\input{…pdf_t}` figures are untagged **entirely** — no warning, no `/Alt`, and no PDF/UA checker complains, because they are missing from the tag tree rather than wrong within it | Wrap in `altfigure`; found by `alt_text_audit.py` as `untagged_figure` |
