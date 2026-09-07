@@ -1029,18 +1029,18 @@ why they are absent from the upstream quick-start docs.
 - ⚠ **Do NOT "fix" it with `\tagpdfsetup{math/alt/use}`.** Not because it is invalid —
   ua-2 permits `/Alt` on a `Formula`, so a document carrying it still conforms — but because
   it is *much worse in practice*. Both routes pass a validator; only one is usable. A screen
-  reader that finds `/Alt` is reported to read that string instead of parsing the MathML with
-  MathCat, so you trade a navigable formula for
+  reader that finds `/Alt` reads that string instead of parsing the MathML with MathCat, so
+  you trade a navigable formula for
   `"LaTeX formula starts \begin {math} A \end {math} LaTeX formula ends"`.
   `latex-lab` auto-enables the switch for `ua-1` and leaves it off for `ua-2`
   (`latex-lab-math.ltx`, the `begindocument/end` hook). Earlier versions of this catalogue
   told you to override that default, which was wrong.
-- ⚠ **The screen-reader claim is second-hand and unverified — by us and by upstream.** It comes
-  from ltx-talk issue #17; the person reporting it says plainly that they cannot test it,
-  because proper screen-reader support for maths is currently Windows-only. What *is*
-  measured is everything below: both representations are present in the file, and the `/Alt`
-  is the one a reader is said to prefer. If you can test with a Windows screen reader, that
-  would settle it — and is worth reporting back upstream either way.
+- **Verified upstream, not here.** The precedence of MathML over `/Alt` is the published
+  position of the PDF Association's *Best Practice Guide: Math in PDF* (v1.0, PDF Association,
+  written by the LaTeX Project Liaison Working Group), and LaTeX Project members test the
+  combination with NVDA + MathCat. Confirmed by ltx-talk upstream on PR #21. We have not
+  reproduced it locally: screen-reader support for maths is Windows-only at present. The
+  measurements below are ours and stand on their own.
 - **Not pursued: a per-formula, human-written `/Alt`.** The obvious wish is a
   `\altmath{a polynomial of degree n}{f(x)=\sum…}` — a real sentence rather than source read
   aloud. latex-lab *does* pass `alt = \l__math_content_alt_tl` to `\tag_struct_begin:n` for
@@ -1230,16 +1230,39 @@ why they are absent from the upstream quick-start docs.
   \altinput{A generated diagram showing a labelled box.}{fig.pdf_t}
   ```
   Do **not** edit the `.pdf_t` to add `alt=` — xfig regenerates it.
-- **Why the key beats the old `altfigure` wrapper here.** Measured on the same inputted figure:
+- **The wrapper was not the mistake; its body was.** An inputted figure still needs something
+  at the call site. What was wrong is *how* the old `altfigure` did it: hand-writing
+  `\tagstructbegin{tag=Figure,alt={#1}}` builds a `Figure` around content `latex-lab` already
+  tags, so you get a `Figure` inside a `Figure` and the inner `picture` environments claim
+  their own placeholder `/Alt` of `"picture environment"`. Setting the key instead lets the
+  existing structure carry the description. Measured on the same inputted figure:
 
-  | | `/Alt` entries | `/Figure` elements | junk alt |
+  | wrapper body | `/Alt` entries | `/Figure` elements | junk alt |
   |---|---|---|---|
-  | `altfigure` | 3 | 5 | `"picture environment"` ×2 |
-  | `\altinput` | 2 | 4 | none |
+  | `\tagstructbegin{tag=Figure,alt={#1}}\tagmcbegin{}` | 3 | 5 | `"picture environment"` ×2 |
+  | `\keys_set:nn{tag/graphic}{alt={#1}}` | 2 | 4 | none |
 
-  The wrapper let the inner `picture` environments claim their own placeholder `/Alt` of
-  `"picture environment"` *inside* your `Figure`. Setting the key suppresses that. The real
-  description is still applied twice (once per `picture`), which is untidy but not misleading.
+  The real description is still applied twice (once per `picture`), which is untidy but not
+  misleading.
+- **Upgrading a deck that already uses `altfigure`: change the definition, not the call
+  sites.** The environment already groups, so the key is scoped correctly by `\end{altfigure}`:
+
+  ```latex
+  \ExplSyntaxOn
+  \NewDocumentEnvironment{altfigure}{ m }
+    { \keys_set:nn { tag / graphic } { alt = {#1} } }
+    { }
+  \ExplSyntaxOff
+  ```
+
+  Verified byte-identical to `\altinput` on the same figure: 4 `/Figure`, 2 `/Alt`, no junk.
+  One edit in the shared preamble fixes every `\begin{altfigure}` in a course. Remove the
+  wrapper from `tikzpicture`/`pgfplots` call sites, though — those take the `alt` key
+  directly and need none.
+- **General rule: do not hand-roll tag structure.** If `latex-lab` tags a construct, configure
+  it through its keys. Wrapping it in `\tagstructbegin`/`\tagmcbegin` nests inside what it
+  already built. The same error shows up on the title page in **A-HEADINGS** (`\tagstructbegin{tag=H1}`,
+  marked WRONG there for the same reason).
 - **Beamer side:** `\altinput` is ltx-talk-only. If the deck still dual-compiles, give the
   Beamer preamble `\newcommand{\altinput}[2]{\input{#2}}`. The `alt` key on `tikzpicture` is
   ignored harmlessly by Beamer, so it needs nothing.
@@ -1270,10 +1293,13 @@ why they are absent from the upstream quick-start docs.
 > | Silent failure | Symptom | Entry |
 > |---|---|---|
 > | frame titles roled `H4` by the class | "headings do not begin at level one" | A-HEADINGS |
-> | `Formula` elements with no `/Alt` | "images without a description", pointing at maths | A-MATHALT |
+> | *(not a failure)* maths tagged with MathML and no `/Alt` | a ua-1 checker calls it "images without a description"; the file is correct | A-MATHALT |
 > | every `tabular` is a `Table` with no `TH` | "tables missing headers", including layout grids | A-TABLE-TH |
 > | saturated emphasis colours | "text with insufficient contrast" | A-CONTRAST |
 > | `tikzpicture` / `\input{…pdf_t}` figures | **no symptom at all** — absent from the reading order and from every audit | A-TIKZ-ALT |
+>
+> The A-MATHALT row is in this table because a checker reports it, not because anything is
+> wrong. Do not "fix" it. Read the entry first.
 >
 > And one that no check here catches at all, because the PDF is correct in every respect
 > except how it looks:

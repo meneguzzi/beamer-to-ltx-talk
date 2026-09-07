@@ -36,3 +36,6 @@ htmlcov/
 *.toc
 *.vrb
 *.xdv
+
+# Local working notes for Claude (not part of the skill)
+CLAUDE.md
