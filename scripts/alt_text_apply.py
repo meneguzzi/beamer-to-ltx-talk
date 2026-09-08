@@ -16,7 +16,9 @@ and rewrites each \\includegraphics to carry alt={...}:
 
 Entries with an empty "alt" are skipped (and reported), so it is safe to fill the
 worklist in batches. Never touches an \\includegraphics that already has alt=.
-Idempotent. Use --decorative to emit alt={} for purely ornamental images.
+Idempotent. Decorative images are NOT handled here: they need the `artifact` key, which
+this script does not emit, and `alt={}` does not mark anything as decorative (it is a
+no-op -- see references/alt-text.md rule 5). Mark them by hand.
 
 Usage:
     alt_text_apply.py alt-worklist.json [--dry-run]

@@ -159,7 +159,7 @@ Errors the compiler *does* report:
 | **C-MAKETITLE** | `frame-title-arg` breaks `\maketitle` | Don't use `frame-title-arg` |
 | **C-TITLEPAGE** | `\maketitle` fills frame; trailing text overlaps | Use `\coursetitlepage{}{}{}` |
 | **C-NOBEAMER** | All `\usetheme`/`\setbeamer*` are undefined | Rebuild styling with `\EditInstance` |
-| **C-BACKGROUND** | No `\usebackgroundtemplate` | Overlay tikz node (never a no-op stub) |
+| **C-BACKGROUND** ⚠️ | No `\usebackgroundtemplate`; a stub renders white on white | Define it in the shared preamble on the `shipout/background` hook (decks unchanged) |
 | **C-AND-TITLE** ⚠️ | `\and` typeset outside `\author` (e.g. in a custom title page) → **101 errors**, none near the fault (`Misplaced \crcr`) | `\renewcommand{\and}{\qquad}` for the duration of the title frame; already in `preamble-template.tex` |
 | **C-IMMATURE** | `block`/theorem envs are undocumented/incomplete (issues #205, #219); `media9` untested under tagging | Use sparingly; build theorems with `tcolorbox` (C-THEOREM) |
 | **C-OLDFONT** | `\sc`/`\it`/`\bf` undefined, and may sit inside maths | `\ifmmode`-guarded `\providecommand` stubs |

@@ -52,6 +52,7 @@ in the head comment. Measured for the current set:
 | `C-DISPLAY-DOLLAR` | items after the display outdent to the frame margin | no — needs `pdftotext -bbox` |
 | `C-FRAMETITLE`, `C-FRAMETITLE-NESTED` | title renders as body text, header bar empty | no — visual |
 | `C-TITLEPAGE` | **did not reproduce on 0.5.3** — see the fixture's head comment | n/a |
+| `C-BACKGROUND` | stubbed out, the background page is 99% white under white text; unscoped, it leaks onto page 3 | no — visual; sample the page, or count `/S /Figure` |
 
 ⚠ **`pdftotext` cannot verify overlays.** ltx-talk typesets every overlay branch once and
 toggles visibility with PDF OCG layers, so hidden content is still present in the extracted
