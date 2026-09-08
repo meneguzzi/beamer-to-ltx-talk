@@ -25,10 +25,25 @@ so the bar for contributions is mostly "does this hold up against a real deck," 
    done
    python3 scripts/convert_deck.py --help
    ```
-3. **Update `references/compromises.md`** alongside any script change that adds or changes detection.
+3. **Prefer a fix that lives in the shared preamble.** Where a Beamer command has no ltx-talk
+   equivalent, try defining that command in `assets/preamble-template.tex` (deployed as
+   `ltx-common.tex`) before you reach for anything that rewrites deck bodies. ltx-talk is
+   experimental and moving: a shim in one file is deleted in one edit when the class catches up,
+   and every converted deck is correct the moment it is. A fix spread through deck bodies has to
+   be found and undone deck by deck, which in practice means it never is. In order of preference:
+
+   1. A command or setting in the shared preamble. Deck source unchanged. C-TOC and
+      C-BACKGROUND are the worked examples: the decks keep their original `\section{Title}`
+      and `\usebackgroundtemplate{...}` lines, and the preamble defines what they mean.
+   2. A `convert_deck.py` rewrite. Deck source changes once, mechanically.
+   3. A lint rule plus a hand fix. Only where the correct output needs judgement the script
+      cannot make (C-ONSLIDE-ARG).
+
+   Say which of the three your change uses, and if it is 2 or 3, why 1 was not possible.
+4. **Update `references/compromises.md`** alongside any script change that adds or changes detection.
    The catalogue (symptom → cause → workaround → detect → revisit-when) is the actual source of
    truth; the code enforces it, not the other way round.
-4. **Note the ltx-talk version** you tested against. The catalogue tracks this per-entry because
+5. **Note the ltx-talk version** you tested against. The catalogue tracks this per-entry because
    ltx-talk is still experimental and behaviour shifts between releases.
 
 ## What this project won't automate
