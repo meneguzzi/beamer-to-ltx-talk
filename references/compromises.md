@@ -6,6 +6,22 @@ verified across 0.5.0–0.5.2** (0.5.0 released 2026-04-30; dev branch needs LaT
 workaround → revisit when**. Most only appear under tagging (`\DocumentMetadata`), which is
 why they are absent from the upstream quick-start docs.
 
+**Where a workaround lives matters as much as what it is.** ltx-talk is experimental and
+moving, so every entry here is temporary by design. A workaround that sits in the shared
+preamble (`assets/preamble-template.tex`, deployed as `ltx-common.tex`) is deleted in one edit
+when the class catches up, and every converted deck is correct the moment it is. A workaround
+spread through deck bodies has to be found and undone deck by deck. So, in order of preference:
+
+1. **A command or setting in the shared preamble.** Deck source unchanged. C-TOC and
+   C-BACKGROUND are the worked examples — the decks keep their original `\section{Title}` and
+   `\usebackgroundtemplate{...}` lines, and the preamble defines what they mean.
+2. **A `convert_deck.py` rewrite.** Deck source changes once, mechanically.
+3. **A lint rule plus a hand fix.** Only where the correct output needs judgement the script
+   cannot make — C-ONSLIDE-ARG, where automating it corrupted a real deck.
+
+Entries that use 2 or 3 should say why 1 was not possible. **Revisit when** is where an entry
+records what would let it move up, or disappear.
+
 **Before relying on this, re-check upstream** — these are version-pinned:
 - Changelog: https://github.com/josephwright/ltx-talk/blob/main/CHANGELOG.md
 - Issues: https://github.com/josephwright/ltx-talk/issues

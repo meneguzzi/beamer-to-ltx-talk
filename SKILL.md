@@ -320,7 +320,18 @@ comma in maths lands in the text layer as `;`, every period as `:` — the slide
 only a text extraction catches it. LuaTeX is also the only engine that gets MathML on formulas;
 XeTeX fixes the fonts but emits empty `/Formula` elements. See **C-PDFTEX-MATH**.
 
-Then triage against `references/compromises.md`. The signatures you will most likely hit:
+Then triage against `references/compromises.md`.
+
+> **Fix it in the shared preamble where you can.** If a Beamer command is simply undefined,
+> the first thing to try is defining it in `ltx-common.tex` to do the ltx-talk equivalent,
+> leaving the decks untouched — that is how C-TOC and C-BACKGROUND work, and it is why the
+> decks keep their original `\section{Title}` and `\usebackgroundtemplate{...}` lines.
+> ltx-talk is moving: a shim in one file is deleted in one
+> edit once the class catches up, and every deck is correct immediately. The same fix spread
+> through deck bodies has to be undone deck by deck. Only reach for a deck-body edit when the
+> right output needs a judgement the preamble cannot make.
+
+The signatures you will most likely hit:
 
 - **`Improper \halign inside $$'s`** → an `algpseudocodex` algorithm. Confirm the preamble
   uses classic `algpseudocode`; that alone fixes it. (Do **not** chase `varwidth`/minipage/
