@@ -50,6 +50,7 @@ in the head comment. Measured for the current set:
 | `C-FRAMESUBTITLE` | subtitle text absent from the PDF | no — needs a `pdftotext` grep |
 | `C-HANDOUT-MODE` | handout stacks all overlays on one page | no — handout build only |
 | `C-DISPLAY-DOLLAR` | items after the display outdent to the frame margin | no — needs `pdftotext -bbox` |
+| `C-FRAME-OPT` | `[b]` frame renders centred instead of bottom-aligned | no — needs `pdftotext -bbox` (`yMin` 135.76 vs 247.96) |
 | `C-FRAMETITLE`, `C-FRAMETITLE-NESTED` | title renders as body text, header bar empty | no — visual |
 | `C-TITLEPAGE` | **did not reproduce on 0.5.3** — see the fixture's head comment | n/a |
 

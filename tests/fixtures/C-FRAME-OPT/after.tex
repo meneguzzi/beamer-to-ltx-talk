@@ -1,0 +1,31 @@
+% Converted, ltx-talk. C-FRAME-OPT workaround: name the key. The mapping is total and
+% unambiguous, so convert_deck.py applies it: b -> vertical-alignment=bottom,
+% t -> top, c -> center, allowframebreaks -> auto-break=true.
+%
+% auto-break=true, not auto-break: it is the missing '=' that gets a list thrown away,
+% not the unknown word. Measured on 0.6.0, one over-long frame -- [auto-break] gives 2
+% pages (the key never fired), [auto-break=true] gives 1.
+%
+% Measured placement of the body text, lualatex, 0.6.0, pdftotext -bbox yMin:
+%   no option / [b] / [t]      135.76   <- all three identical: centred
+%   [vertical-alignment=bottom] 247.96
+%   [vertical-alignment=top]     23.57
+% So the fixture pair compiles either way and the suite cannot catch this one; the
+% yMin measurement is the check that can.
+%
+% Not fixable in the preamble: defining b/t/c as real keys in talk/frame leaves [b] centred
+% anyway, because the list is never parsed. And this file will NOT build under beamer --
+% "! Package keyval Error: vertical-alignment undefined". Both are in the catalogue entry,
+% with the four-line beamer-side shim for decks that must build both ways.
+%
+% plain, shrink, squeeze, noframenumbering have no ltx-talk key at all. fragile is
+% moot: verbatim goes through frame* (C-VERBATIM), not through a frame option.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+
+\begin{document}
+\begin{frame}[vertical-alignment=bottom]
+\frametitle{Pinned to the bottom}
+This paragraph sits at the foot of the slide, under the empty space.
+\end{frame}
+\end{document}

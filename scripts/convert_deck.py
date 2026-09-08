@@ -204,6 +204,70 @@ def rewrite_display_dollar(text: str):
     return '\n'.join(lines)
 
 
+#: C-FRAME-OPT: Beamer's positional frame options -> ltx-talk's frame keys.
+#: Everything not listed here (plain, shrink, squeeze, noframenumbering, fragile) has no
+#: ltx-talk key and is left in place for --lint to report; containsverbatim MUST survive
+#: this pass, because convert_line turns that frame into frame* and strips it there.
+FRAME_OPT_MAP = {
+    'b': 'vertical-alignment=bottom',
+    't': 'vertical-alignment=top',
+    'c': 'vertical-alignment=center',
+    'allowframebreaks': 'auto-break=true',
+}
+
+FRAME_OPT_RE = re.compile(r'(\\begin\{frame\*?\}(?:<[^>]*>)?)\[([^\]]*)\]')
+
+#: A frame option list with at least one bare (no '=') item. See C-FRAME-OPT: such an
+#: item is discarded, and silently so as long as NOTHING in the list carries an '='.
+BARE_FRAME_OPT_RE = re.compile(
+    r'\\begin\{frame\*?\}(?:<[^>]*>)?\[(?:[^\]]*,)?\s*[^\],=\s][^\],=]*\s*(?:,|\])')
+
+
+def rewrite_frame_options(text: str) -> str:
+    r"""C-FRAME-OPT: [b] -> [vertical-alignment=bottom], and the rest of the mapping.
+
+    ltx-talk's frame takes a key-value list, so Beamer's bare option words are not
+    options at all. A list of only bare words is thrown away without a word: no error,
+    no warning, right page count, identical extracted text -- the frame just renders
+    centred. (Add any key=value to the same list and the bare word becomes a hard
+    "unknown key" error instead, which is why this is nastiest in the common
+    single-option case.) It is the missing '=' that does it, not the word: a bare
+    auto-break -- a key the class really does have -- is discarded just the same, which
+    is why allowframebreaks maps to auto-break=true and not to auto-break.
+    """
+    fixed = 0
+    leftovers = set()
+    out = []
+    for line in text.split('\n'):
+        if is_comment(line):
+            out.append(line)
+            continue
+
+        def swap(m):
+            nonlocal fixed
+            items = [x.strip() for x in m.group(2).split(',') if x.strip()]
+            new = [FRAME_OPT_MAP.get(i, i) for i in items]
+            if new == items:
+                return m.group(0)
+            fixed += 1
+            leftovers.update(i for i in items
+                             if i not in FRAME_OPT_MAP and '=' not in i
+                             and i != 'containsverbatim')
+            return f'{m.group(1)}[{",".join(new)}]'
+
+        out.append(FRAME_OPT_RE.sub(swap, line))
+
+    if fixed:
+        NOTE.append(f'frame option -> ltx-talk key ({fixed})')
+    if leftovers:
+        WARN.append(('C-FRAME-OPT',
+                     'Frame option(s) ' + ', '.join(sorted(leftovers)) + ' have no ltx-talk '
+                     'key and were left alone. They are now beside a key=value option, which '
+                     'turns them from silently-ignored into a hard "unknown key" error. '
+                     'Delete them, or handle them by hand.'))
+    return '\n'.join(out)
+
+
 def pair_framestar_ends(text: str) -> str:
     r"""C-VERBATIM: close every \begin{frame*} with \end{frame*}, not \end{frame}.
 
@@ -385,6 +449,16 @@ LINTS = [
      re.compile(r'\\tableofcontents'),
      '\\tableofcontents corrupts the tag tree under ltx-talk. Remove it; the redefined '
      '\\section already emits a divider frame per section.'),
+    ('C-FRAME-OPT',
+     BARE_FRAME_OPT_RE,
+     "Beamer positional frame option: ltx-talk's frame takes a KEY-VALUE list, so a bare "
+     'word is not an option. [b]/[t]/[c] are thrown away without a word -- no error, no '
+     'warning, right page count, identical pdftotext -- and every aligned frame silently '
+     'renders centred. Use vertical-alignment=bottom/top/center, allowframebreaks -> '
+     'auto-break=true; convert_deck.py rewrites those four. The missing = is what does it, '
+     'not the word: bare auto-break, a key ltx-talk DOES know, is discarded just the same. '
+     'plain/shrink/squeeze/noframenumbering have no key at all; containsverbatim needs '
+     'frame* (C-VERBATIM).'),
     ('C-NOBEAMER',
      re.compile(r'\\(?:usetheme|usecolortheme|usefonttheme|setbeamer\w*|usebeamer\w*|'
                 r'beamercolorbox)\b'),
@@ -577,6 +651,7 @@ def main():
     text = strip_atbeginsection(text)
     text = fix_center_arg(text)
     text = rewrite_display_dollar(text)   # C-DISPLAY-DOLLAR
+    text = rewrite_frame_options(text)    # C-FRAME-OPT
 
     out_lines = [convert_line(ln + '\n', args.old_preamble, args.new_preamble)
                  for ln in text.split('\n')]

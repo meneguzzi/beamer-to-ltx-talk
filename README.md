@@ -123,6 +123,7 @@ Full details, including error signatures and workarounds, are in [`references/co
 | **C-FRAMETITLE-NESTED** | Nested-brace title left unconverted → frame has **no title**, text lands in the body | Run `fix_frame_titles.py` |
 | **C-CENTER-ARG** | `\center{…}` used as a command → tag tree corrupts, error lands **far away** | `\begin{center}…\end{center}` |
 | **C-OVERLAY-ALGO** | `\State<2>` used as an overlay spec → **literal `<2>` printed on the slide**, overlay never fires | `\State \uncover<2>{…}` (not `\onslide`, see C-ONSLIDE-ARG) |
+| **C-FRAME-OPT** | ltx-talk's `frame` takes a **key-value** list, so Beamer's bare `[b]`/`[t]`/`[c]` are not options: the list is discarded whole and every aligned frame renders **centred**. Only silent while nothing in the list carries an `=` — `[b,label=x]` is a hard error | `vertical-alignment=bottom`/`top`/`center`; `convert_deck.py` rewrites them |
 | **C-NO-UA2** | `\DocumentMetadata{… pdfstandard=a-4 …}` declares PDF/**A**-4 and no PDF/UA level → the PDF makes **no PDF/UA claim** (no `pdfuaid:part`), so a checker may judge it under PDF/UA-1 | `pdfstandard={a-4,ua-2}` |
 | **C-NO-DOCMETA** | `\DocumentMetadata` shipped commented out → ltx-talk **half-loads**, cascading `Undefined control sequence` naming none of the real cause | Uncomment/add `\DocumentMetadata{…}` before `\documentclass` |
 | *(alt text)* | `\includegraphics` without `alt=` → screen reader reads out **the filename** | `alt_text_audit.py` |
