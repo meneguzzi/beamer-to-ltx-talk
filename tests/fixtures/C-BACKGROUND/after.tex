@@ -1,0 +1,71 @@
+% Converted, ltx-talk. C-BACKGROUND workaround: define \usebackgroundtemplate in
+% the shared common preamble, on the kernel's shipout/background hook -- the layer
+% ltx-talk uses for its own page colour. Painted beneath all content, once per
+% shipped page.
+%
+% The shim block below is a copy of the one in assets/preamble-template.tex; a
+% real deck gets it from ltx-common.tex and does not repeat it. Everything from
+% \begin{document} down is the beamer source of before.tex VERBATIM, group and
+% \includegraphics call included. That is the point of doing it this way: when
+% ltx-talk gains a background interface, the shim is deleted in one edit and every
+% converted deck is already correct, with no deck to reconvert.
+%
+% NOT an overlay tikz node. \begin{tikzpicture}[remember picture,overlay] with a
+% node at (current page.center) is ordinary CONTENT that draws outside its own
+% box, so it paints in document order -- on top of the header, which is where
+% ltx-talk draws the frame title. Measured on a THEMED rig (this fixture has no
+% header bar to lose): tikz recipe, header band 0% theme colour -- the image covers
+% the bar and the title with it; this hook, 98%. It also needs a converged build:
+% given one pass, current page never resolves and the image lands in the wrong
+% place, silently.
+%
+% artifact: without it the background enters the structure tree as a /Figure whose
+% /Alt is the FILENAME -- once per shipped page, so this two-overlay frame gets two
+% of them. Measured on THIS file: 2 Figures / 2 Alts (/Alt = "example-image-16x9.pdf")
+% without it, 0 / 0 with it, and the two renders are byte-identical. alt={} does
+% NOT do this -- it still emits the Figure with the filename as its /Alt
+% (alt-text.md rule 5 says otherwise; it is wrong).
+%
+% height=\paperheight is supplied by the shim, not by the deck. Beamer scaled by
+% width and cropped the overflow; under \put there is no crop, so width alone
+% leaves a wider-than-page image short -- 13% of the page WHITE for a 21:9 image
+% on a 16:9 page, under white text. The cost is that a mismatched image is
+% stretched rather than cropped.
+%
+% \aftergroup restores the scope the beamer original got from { ... }. Hook code
+% is global, so without it the background leaks onto every later frame. A single
+% \AddToHookNext would cover only the first of the two overlay pages.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+\usepackage{graphicx}
+
+%% --- from assets/preamble-template.tex; a real deck gets this from ltx-common.tex
+\ExplSyntaxOn
+\newcommand{\ltxtalkbgartifact}{\keys_set:nn{tag/graphic}{artifact}}
+\ExplSyntaxOff
+\newcommand{\ltxtalkbgoff}{\RemoveFromHook{shipout/background}[talkbg]}
+\newcommand{\usebackgroundtemplate}[1]{%
+  \AddToHook{shipout/background}[talkbg]{%
+    \put(0cm,-\paperheight){%
+      \begingroup\ltxtalkbgartifact\setkeys{Gin}{height=\paperheight}#1\endgroup}%
+  }%
+  \aftergroup\ltxtalkbgoff
+}
+%% --- end shim
+
+\begin{document}
+{
+\usebackgroundtemplate{\includegraphics[width=\paperwidth]{example-image-16x9}}%
+\begin{frame}[vertical-alignment=bottom]
+\frametitle{Warning}
+\begin{itemize}
+  \item \color{white} White text over the image
+  \item<2-> \color{white} Second overlay, still white
+\end{itemize}
+\end{frame}
+}
+\begin{frame}
+\frametitle{After the group}
+The background must not leak onto this page.
+\end{frame}
+\end{document}

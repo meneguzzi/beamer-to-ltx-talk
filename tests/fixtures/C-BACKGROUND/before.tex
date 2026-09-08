@@ -1,0 +1,29 @@
+% Beamer source: a full-bleed background image behind one frame, with white text
+% over it. The { ... } group is what scopes \usebackgroundtemplate to this frame.
+% ltx-talk has no \usebackgroundtemplate -- "! Undefined control sequence"
+% (C-BACKGROUND). The danger is not the error, it is the repair: stub the command
+% out and the frame still compiles, still has the right page count, and renders
+% white text on a white page.
+%
+% The second frame is here to pin the SCOPE: beamer's { ... } group ends the
+% template, and the conversion must end it too.
+%
+% example-image-16x9.pdf ships with TeX Live (the mwe package), so this fixture
+% needs no asset of its own.
+\documentclass[aspectratio=169]{beamer}
+\usepackage{graphicx}
+
+\begin{document}
+{
+\usebackgroundtemplate{\includegraphics[width=\paperwidth]{example-image-16x9}}%
+\begin{frame}[b]{Warning}
+\begin{itemize}
+  \item \color{white} White text over the image
+  \item<2-> \color{white} Second overlay, still white
+\end{itemize}
+\end{frame}
+}
+\begin{frame}{After the group}
+The background must not leak onto this page.
+\end{frame}
+\end{document}

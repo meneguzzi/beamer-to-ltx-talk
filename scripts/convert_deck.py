@@ -465,8 +465,15 @@ LINTS = [
      'Beamer-only command; undefined in ltx-talk. Restyle via \\EditInstance.'),
     ('C-BACKGROUND',
      re.compile(r'\\usebackgroundtemplate'),
-     'no equivalent in ltx-talk. Use an overlay tikz node — do NOT no-op stub it: these '
-     'frames usually hold white text over a dark image, which would become invisible.'),
+     'no equivalent in ltx-talk -- but do NOT edit this deck. Define '
+     '\\usebackgroundtemplate in your shared preamble instead (the block is in '
+     'assets/preamble-template.tex): it puts the image on the kernel shipout/background '
+     'hook, adds the artifact keyword and height=\\paperheight, and scopes itself with '
+     '\\aftergroup, leaving these lines verbatim. Check ltx-common.tex has it, then ignore '
+     'this. Do NOT no-op stub the command -- these frames hold white text over a dark image, '
+     'so the page renders white on white with no error. Do NOT use an overlay tikz node '
+     'either: it is content, so it paints OVER the frame title, and it needs a converged '
+     'build to land in the right place.'),
     ('C-ALGO',
      re.compile(r'\\usepackage(?:\[[^\]]*\])?\{algpseudocodex\}'),
      'algpseudocodex cannot be typeset under tagging at all. Swap to classic '
@@ -595,6 +602,14 @@ def lint(text: str, path: str) -> int:
                      '\\input{...tag-commands...} commented out?). ltx-talk half-loads '
                      'without it: \\institute/\\hypersetup/frame*/\\normalsize all come '
                      'up "undefined", none naming the cause.', '\\documentclass{ltx-talk}'))
+    # C-BACKGROUND is fixed by a shim in the shared preamble, not by editing the deck, so a
+    # file that DEFINES \usebackgroundtemplate has already handled it. We cannot see an
+    # \input'd ltx-common.tex, so a deck that only USES the command still gets the report --
+    # there it means "check your common preamble has the shim", not "edit this line".
+    suppressed = set()
+    if re.search(r'\\(?:new|renew|provide)command\s*\{?\\usebackgroundtemplate', text):
+        suppressed.add('C-BACKGROUND')
+
     inside_verbatim = False
     for lineno, line in enumerate(text.split('\n'), 1):
         if is_comment(line):
@@ -610,6 +625,8 @@ def lint(text: str, path: str) -> int:
             continue
         code = re.sub(r'(?<!\\)%.*$', '', line)     # ignore trailing comments
         for cid, pat, msg in LINTS:
+            if cid in suppressed:
+                continue
             if pat.search(code):
                 hits.append((lineno, cid, msg, line.strip()))
     hits.extend(handout_mode_findings(text))

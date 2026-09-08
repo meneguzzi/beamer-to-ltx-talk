@@ -1019,18 +1019,79 @@ why they are absent from the upstream quick-start docs.
   \providecommand{\sc}{\ifmmode\else\scshape\fi}   % likewise \it \bf \rm \sf \tt \sl
   ```
 
-## C-BACKGROUND — no `\usebackgroundtemplate`
+## C-BACKGROUND — no `\usebackgroundtemplate`  ⚠ every automated check passes while the slide is wrong
 
-- **Symptom:** `Undefined control sequence` at `\usebackgroundtemplate`.
-- **Cause:** ltx-talk has no equivalent.
-- **Workaround:** an overlay tikz node. ⚠ **A no-op stub is dangerous**: these frames
-  typically carry *white text over a dark image*, so silently dropping the background makes
-  the text invisible rather than merely unstyled.
+- **Symptom:** `Undefined control sequence` at `\usebackgroundtemplate`. That is the easy part.
+  The hard part is the repair: these frames carry *white text over a dark image*, so a no-op
+  stub gives white text on a white page — clean compile, right page count, `Tagged: yes`,
+  matching `pdftotext`. Measured on the fixture: stubbed, the background page is **99% white**.
+- **Cause:** ltx-talk has no equivalent. It does its own page colour through the kernel's
+  `shipout/background` hook (`\__talk_pagecolor:n`), which is the correct layer for this.
+- **Workaround: define the command in the shared preamble. The decks are not edited at all.**
+  Shipped in `assets/preamble-template.tex`:
   ```latex
-  \begin{tikzpicture}[remember picture,overlay]
+  \ExplSyntaxOn
+  \newcommand{\ltxtalkbgartifact}{\keys_set:nn{tag/graphic}{artifact}}
+  \ExplSyntaxOff
+  \newcommand{\ltxtalkbgoff}{\RemoveFromHook{shipout/background}[talkbg]}
+  \newcommand{\usebackgroundtemplate}[1]{%
+    \AddToHook{shipout/background}[talkbg]{%
+      \put(0cm,-\paperheight){%
+        \begingroup\ltxtalkbgartifact\setkeys{Gin}{height=\paperheight}#1\endgroup}%
+    }%
+    \aftergroup\ltxtalkbgoff
+  }
+  ```
+  The deck keeps its `{ ... }` group, its `\usebackgroundtemplate` line and its own
+  `\includegraphics` call verbatim. Beamer's `\usebackgroundtemplate{}` reset idiom works too.
+  When ltx-talk grows a background interface, delete the block: every converted deck is already
+  correct, with nothing to reconvert. Same shape as C-TOC.
+- **Do NOT use an overlay tikz node.** It was the recipe here and it is wrong:
+  ```latex
+  \begin{tikzpicture}[remember picture,overlay]     % <- do not do this
     \node at (current page.center) {\includegraphics[width=\paperwidth]{img.pdf}};
   \end{tikzpicture}
   ```
+  It is not a background. It is ordinary **content** that draws outside its own bounding box,
+  so it paints in document order — over the header, which is where ltx-talk puts the frame
+  title. And `remember picture` + `current page` resolves through the `.aux`, so any error
+  anywhere in the deck that stops latexmk converging turns this frame into a misplaced image
+  with the body text on white — silently.
+- **Measured** (ltx-talk 0.6.0, themed deck with header and footer bars, 60 dpi render):
+
+  | recipe | header band still theme colour | frame title | needs a converged build |
+  |---|---|---|---|
+  | tikz `remember picture` node | **0%** | painted over | **yes**, silently |
+  | `shipout/background` hook | 98% | visible | no |
+  | ordinary frame (control) | 98% | visible | — |
+
+  Page area covered by the image, against the Beamer original: Beamer 81%, hook 77%, tikz
+  87%. Beamer draws its background *under* the chrome; the hook matches, the tikz node does
+  not. On the fixture, white area per page — Beamer 0 / 0 / 95%, converted 0 / 0 / 96%.
+- **Three things the shim adds that the deck's own graphics call does not have.**
+  - `artifact`. Without it the background enters the structure tree as a `/Figure` whose
+    `/Alt` is the **filename**, once per shipped page — a two-overlay frame gets two.
+    Measured on the fixture: 2 `/S /Figure` and 2 `/Alt` without it, **0 and 0** with it,
+    renders byte-identical. ⚠ `alt={}` does **not** do this — it still emits the figure with
+    the filename as its alt, contradicting `alt-text.md` rule 5. It is set through a macro
+    defined at top level because `\ExplSyntaxOn` does not survive being stored in hook code,
+    so `\keys_set:nn` cannot be written inline inside `\AddToHook` (10 errors if you try).
+  - `height=\paperheight`. Beamer scaled by width and cropped the overflow; under `\put`
+    there is no crop, so `width` alone leaves an image wider than the page short — **13% of
+    the page white** (measured, 21:9 image on a 16:9 page), under white text, which is
+    exactly the failure this entry exists to prevent. The cost is that a mismatched image is
+    stretched rather than cropped. For an aspect-matched image the question does not arise.
+  - `\aftergroup`. Hook code is global, so without it the background leaks onto every later
+    frame; this reproduces the scope the Beamer original got from `{ ... }`. It covers every
+    overlay page of the frame — a single `\AddToHookNext` would cover only the first.
+- **Detect before compiling:** `convert_deck.py --lint` reports `C-BACKGROUND` on any
+  `\usebackgroundtemplate`, to tell you the shim must be in the common preamble. It does
+  **not** rewrite the deck, because with the shim there is nothing to rewrite.
+- **Verify by rendering.** This entry is the strongest case in the catalogue for that rule.
+  Page count, `Tagged: yes`, 0 tagpdf errors and a clean text diff all passed on a slide that
+  had lost its title and most of its visible text.
+- **Revisit when:** ltx-talk gains a documented background-image interface of its own — at
+  which point the shim block is deleted and nothing else changes.
 
 ## C-EDITINSTANCE-EXPAND — template colour keys don't expand macros
 

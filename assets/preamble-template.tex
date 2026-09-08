@@ -444,3 +444,56 @@
 %% into \heading{X}. Decks converted then still say \heading. New decks should just
 %% use \section.
 \newcommand{\heading}[1]{\section{#1}}
+
+%% ---------------------------------------------------------------------------
+%% C-BACKGROUND: \usebackgroundtemplate, without touching the decks.
+%%
+%% ltx-talk has no \usebackgroundtemplate, so the decks' background frames stop
+%% at "! Undefined control sequence". Stubbing it out is worse than the error:
+%% these frames carry white text over a dark image, so the frame compiles, keeps
+%% its page count, says Tagged: yes — and renders white on white.
+%%
+%% Define the command instead. The deck keeps its original lines verbatim,
+%% including the { ... } group and the author's own \includegraphics call.
+%%
+%% Do NOT reach for an overlay tikz node (an earlier version of this skill said
+%% to). A tikzpicture with [remember picture,overlay] is ordinary CONTENT that
+%% draws outside its own box, so it paints in document order — over the header,
+%% which is where ltx-talk draws the frame title. It also resolves current page
+%% through the .aux, so any error that stops latexmk converging leaves the image
+%% in the wrong place, silently. The kernel's shipout/background hook is the
+%% layer ltx-talk uses for its own page colour (\__talk_pagecolor:n) and paints
+%% beneath everything, which is what a background is.
+%%
+%% Three things the shim adds that the deck's own graphics call will not have:
+%%
+%%  * artifact — without it the background enters the structure tree as a
+%%    /Figure whose /Alt is the FILENAME, once per SHIPPED page, so an n-overlay
+%%    frame gets n bogus figures. (alt={} does NOT do this; it still emits the
+%%    Figure with the filename as its /Alt.) Set through tag/graphic via a macro
+%%    defined at top level: \ExplSyntaxOn does not survive being stored in hook
+%%    code, so \keys_set:nn cannot be written inline inside \AddToHook.
+%%  * height=\paperheight — beamer scaled by width and cropped the overflow.
+%%    Under \put there is no crop, so width alone leaves a wider-than-page image
+%%    short: measured 13% of the page WHITE for a 21:9 image on a 16:9 page,
+%%    under white text. Full coverage wins; the cost is that a mismatched image
+%%    is stretched rather than cropped.
+%%  * \aftergroup — reproduces the scope the beamer original got from its
+%%    { ... } group. Hook code is global, so without this the background would
+%%    leak onto every later frame. It covers every overlay page of the frame;
+%%    a single \AddToHookNext would cover only the first.
+%%
+%% Retire this whole block when ltx-talk gains a background-image interface of
+%% its own: delete it, and the decks are already correct.
+%% ---------------------------------------------------------------------------
+\ExplSyntaxOn
+\newcommand{\ltxtalkbgartifact}{\keys_set:nn{tag/graphic}{artifact}}
+\ExplSyntaxOff
+\newcommand{\ltxtalkbgoff}{\RemoveFromHook{shipout/background}[talkbg]}
+\newcommand{\usebackgroundtemplate}[1]{%
+  \AddToHook{shipout/background}[talkbg]{%
+    \put(0cm,-\paperheight){%
+      \begingroup\ltxtalkbgartifact\setkeys{Gin}{height=\paperheight}#1\endgroup}%
+  }%
+  \aftergroup\ltxtalkbgoff
+}

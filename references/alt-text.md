@@ -43,9 +43,26 @@ A worked example (from a real planning deck):
 4. **One or two sentences.** If a figure genuinely needs a paragraph (a complex plot, a
    worked derivation), that content belongs in the slide body or the speaker notes, where
    *everyone* benefits — not buried in alt text.
-5. **Decorative images get `alt={}`, not a description.** Course logos, ornamental
-   photos, the fight-club joke background. An empty alt marks it as an artifact and the
-   screen reader skips it. Describing decoration is noise.
+5. **Decorative images get `artifact`, not a description and not `alt={}`.** Course logos,
+   ornamental photos, full-slide background images. `artifact` takes the image out of the
+   structure tree entirely, which is what "decorative" means, and the screen reader skips it.
+   Describing decoration is noise.
+   ```latex
+   \includegraphics[width=\paperwidth,artifact]{logo.pdf}
+   ```
+   ⚠ **`alt={}` does not do this.** Measured on ltx-talk 0.6.0, a plain `\includegraphics`
+   in a frame:
+
+   | key | `/S /Figure` | `/Alt` |
+   |---|---|---|
+   | *(nothing)* | 1 | 1 — the **filename** |
+   | `alt={}` | 1 | 1 — the **filename** |
+   | `artifact` | **0** | **0** |
+   | `tag=Artifact` | 0 | 1 — the filename, now orphaned |
+
+   `alt={}` is a no-op: byte-for-byte the same tag tree as writing no key at all, so the
+   decoration is still announced, by filename — the exact failure this file opens with.
+   `tag=Artifact` is worse than either, leaving the alt behind with no figure to hang on.
 6. **Progressive figures: describe the delta.** For `\only<1>{a.pdf}\only<2>{b.pdf}` (the
    audit flags these as `overlay_variant`), each variant needs its own alt text saying
    *what changed* — "…, now with the explored region shaded" — not a fresh description of
