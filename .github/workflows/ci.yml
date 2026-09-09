@@ -48,6 +48,13 @@ jobs:
             exit 1
           fi
 
+      # convert_deck.py's docstring and SKILL.md Step 2 both promise idempotence, and
+      # nothing checked it until #26 (a second run starred the closer of the first
+      # ordinary frame after every frame* and broke the deck). Source-level only, so it
+      # belongs in this job rather than the TeX Live one.
+      - name: Converter is idempotent (tests/run_converter_idempotence.sh)
+        run: bash tests/run_converter_idempotence.sh
+
       - name: Lint C-HANDOUT-MODE (fires on before.tex, silent on after.tex)
         run: |
           set -e
