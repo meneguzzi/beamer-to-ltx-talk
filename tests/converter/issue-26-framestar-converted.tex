@@ -1,0 +1,23 @@
+% ALREADY CONVERTED source, which is the input convert_deck.py claims to be safe on.
+% A frame* whose \end is already correct, followed by an ordinary frame: re-running the
+% converter used to leave pair_framestar_ends "inside" past the \end{frame*} and star the
+% NEXT ordinary \end{frame}, giving \begin{frame} ... \end{frame*}, which does not compile
+% (#26). The ordinary frame after the verbatim one is the whole point of this file -- keep
+% it, and keep it after.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+\usepackage{listings}
+
+\begin{document}
+\begin{frame*}
+\frametitle{Verbatim}
+\begin{lstlisting}
+x = 1
+\end{lstlisting}
+\end{frame*}
+
+\begin{frame}
+\frametitle{Ordinary frame after the verbatim one}
+Body.
+\end{frame}
+\end{document}

@@ -8,7 +8,9 @@ convert_deck.py — pattern-based Beamer -> ltx-talk source transformer.
 
 Faithful and minimal: rewrites only the constructs the class change forces, never
 touches commented-out lines, preserves indentation, and reports every change and every
-compromise. Idempotent: safe to re-run.
+compromise. Idempotent: safe to re-run, and re-running it on an already-converted
+deck changes nothing. Both halves are checked by tests/run_converter_idempotence.sh
+-- they were claimed here and unchecked until #26 broke real decks.
 
 It does the mechanical 80%. It deliberately does NOT auto-rewrite things that need human
 judgement (the title-page content, folding double titles, anything inside a frame body) —
@@ -274,12 +276,22 @@ def pair_framestar_ends(text: str) -> str:
     convert_deck rewrites the \begin of a verbatim frame but cannot see its matching
     \end from a line-local rewrite, so we walk the file afterwards. frame* cannot
     nest, so a simple in/out flag is enough.
+
+    An \end{frame*} that is ALREADY correct must clear the flag too -- and that is
+    precisely what this pass emits, so it is the second run that suffers. Without the
+    middle branch below the flag stays set past the end of the verbatim frame, and the
+    next ordinary \end{frame} in the file gets starred: a \begin{frame} closed by
+    \end{frame*}, which does not compile (#26). The substring tests are safe in both
+    directions -- '\end{frame*}' does not contain '\end{frame}', the brace differs --
+    but they are not exclusive, so order matters: starred first.
     """
     out, inside, fixed = [], False, 0
     for line in text.split('\n'):
         if not is_comment(line):
             if '\\begin{frame*}' in line:
                 inside = True
+            elif '\\end{frame*}' in line:
+                inside = False
             elif inside and '\\end{frame}' in line:
                 line = line.replace('\\end{frame}', '\\end{frame*}')
                 inside, fixed = False, fixed + 1

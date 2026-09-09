@@ -19,6 +19,12 @@ tests/fixtures/<ID>/
   fixture.conf      # OPTIONAL: engine and pass-count overrides
 ```
 
+Alongside the LaTeX fixtures there is a source-level corpus, which no build touches:
+
+```text
+tests/converter/*.tex        # inputs for tests/run_converter_idempotence.sh
+```
+
 `<ID>` is the catalogue ID from `compromises.md` (`C-ALGO`, `A-TIKZ-ALT`, …) or, for a bug
 with no catalogue entry yet, the GitHub issue number (`ISSUE-2`).
 
@@ -41,6 +47,33 @@ with no catalogue entry yet, the GitHub issue number (`ISSUE-2`).
   that were tried and don't work. The fixture is documentation as much as it is a test; a
   reader who lands here from a failing build should not have to go and find the catalogue
   entry to understand what they are looking at.
+
+## Source-level tests: is the converter idempotent?
+
+`run_fixtures.sh` builds PDFs. `run_converter_idempotence.sh` never invokes LaTeX: it runs
+`convert_deck.py` over a corpus and checks two halves of one promise the script has always
+made in its docstring, and `SKILL.md` Step 2 with it.
+
+| check | property | corpus |
+|---|---|---|
+| fixed point | `convert(x) == x` on a deck that is already converted | `tests/converter/*.tex`, every fixture `after.tex` |
+| idempotence | `convert(convert(x)) == convert(x)` | all of the above plus every `before.tex` and `naive.tex` |
+
+Nothing checked either half until #26, where a second run starred the closing `\end` of the
+first ordinary frame after every `frame*` and stopped real decks compiling. Both halves are
+needed: on already-converted input that bug struck the *first* run, so the two runs agreed
+with each other and only the fixed-point check catches it.
+
+`naive.tex` is exempt from the fixed-point check. That variant is the conversion done without
+a workaround, so the converter still has legitimate work to do on it.
+
+The suite ends with a vacuity guard: the corpus must still contain both shapes that broke —
+an `\end{frame*}` with a later ordinary `\end{frame}`, and a `containsverbatim` frame with an
+ordinary frame after it. Delete the last file with either and the suite fails rather than
+quietly stops testing the regression it exists for.
+
+Add a case to `tests/converter/` when a bug is about what the converter *writes*; add a
+fixture to `tests/fixtures/` when it is about what LaTeX then *does* with it.
 
 ## Assertions
 

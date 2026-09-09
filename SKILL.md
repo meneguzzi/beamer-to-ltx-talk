@@ -233,8 +233,10 @@ The embedded HTML/CSS files tagpdf attaches may force a `PDF/A-4F` validation no
 
 ## Step 2 — Scripted source transforms
 
-Run `scripts/convert_deck.py` (see its `--help`). It is **idempotent** and only rewrites
-patterns, never content. It performs:
+Run `scripts/convert_deck.py` (see its `--help`). It only rewrites patterns, never content,
+and it is **idempotent**: re-running it, including on a deck it has already converted, changes
+nothing. That was claimed and unchecked until it broke decks (#26); it is now enforced by
+`tests/run_converter_idempotence.sh`. It performs:
 
 | Transform | From | To | Note |
 |---|---|---|---|
