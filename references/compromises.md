@@ -126,48 +126,46 @@ records what would let it move up, or disappear.
   ```
 - **Revisit when:** `convert_deck.py` grows a brace matcher of its own.
 
-## C-FRAME-OPT — every bare Beamer frame option is discarded  ⚠ silent; `[b]`/`[t]` become centred
+## C-FRAME-OPT — bare Beamer frame options are discarded  ⚠ silent; `[b]`/`[t]` render centred
 
-- **Symptom: none.** `\begin{frame}[b]` compiles, page count matches, `Tagged: yes`. The
-  content is just in the wrong place — bottom- and top-aligned frames come out centred.
-  `pdftotext` does not see it either: identical on an MWE, and on a real deck the same words
-  come back regrouped into different lines, which reads as extraction noise.
-- **Cause:** ltx-talk's `frame` takes a **key–value** list, not Beamer's positional letters:
-  `\keys_set:nn { talk / frame } {#2}`. Its keys are `action-spec`, `auto-break`,
-  `auto-break-coverage`, `label`, `name`, `supplementary-frame`, `tag-slides`,
-  `vertical-alignment` (`bottom`/`center`/`stretch`/`top`, default `center`). A bare word is
-  none of these. **Observed, not traced through the code: the list is parsed only if it
-  contains an `=`.** Defining the missing key does not rescue it (see below), so this is not
-  key lookup failing — the list never reaches it. It is not about the word. Bare `auto-break`, a key the class really does
-  have, is discarded exactly like bare `b` — measured on one over-long frame, `[auto-break]`
-  gives 2 pages and `[auto-break=true]` gives 1.
-- **Workaround:** name the key. The mapping is total, so `convert_deck.py` applies it:
+- **Symptom:** none. `\begin{frame}[b]` compiles, page count matches, `Tagged: yes`, and the
+  frame renders centred. `pdftotext` does not see it: identical on an MWE, and on a real deck
+  the same words come back regrouped, which reads as extraction noise.
+- **Cause:** ltx-talk's `frame` takes a key–value list, not Beamer's positional letters:
+  `\keys_set:nn { talk / frame } {#2}`. Keys are `action-spec`, `auto-break`,
+  `auto-break-coverage`, `label`, `name`, `supplementary-frame`, `tag-slides` and
+  `vertical-alignment` (`bottom`/`center`/`stretch`/`top`, default `center`).
+  Observed, not traced through the code: **the list is parsed only if it contains an `=`**.
+  The word is irrelevant — bare `auto-break`, a real key, is discarded like bare `b`
+  (over-long frame: `[auto-break]` 2 pages, `[auto-break=true]` 1).
+- **Workaround:** name the key. The mapping is total, so `convert_deck.py` applies it.
 
   | Beamer | ltx-talk | note |
   |---|---|---|
-  | `[b]` | `vertical-alignment=bottom` | **confirmed by measurement** |
-  | `[t]` | `vertical-alignment=top` | same |
-  | `[c]` | `vertical-alignment=center` | inert — already the default; rewritten so the source says what the class reads |
-  | `[allowframebreaks]` | `auto-break=true` | not `auto-break` |
-  | `[label=x]` | `label=x` | genuine key; the one Beamer option that survives untouched |
-  | `[containsverbatim]`, `[fragile]` | — | verbatim goes through `frame*`, not a frame option (**C-VERBATIM**) |
-  | `[plain]`, `[shrink]`, `[squeeze]`, `[noframenumbering]` | — | no key at all; delete or reimplement |
-- **Measured** (ltx-talk 0.6.0, TeX Live 2026, lualatex, `pdftotext -bbox` `yMin` of the body
-  text on a one-frame MWE):
+  | `[b]` | `vertical-alignment=bottom` | measured |
+  | `[t]` | `vertical-alignment=top` | measured |
+  | `[c]` | `vertical-alignment=center` | inert; rewritten so the source says what the class reads |
+  | `[allowframebreaks]` | `auto-break=true` | not bare `auto-break` |
+  | `[label=x]` | `label=x` | the one Beamer option that survives untouched |
+  | `[containsverbatim]`, `[fragile]` | — | verbatim goes through `frame*` (**C-VERBATIM**) |
+  | `[plain]`, `[shrink]`, `[squeeze]`, `[noframenumbering]` | — | no key; delete or reimplement |
+
+- **Measured** (ltx-talk 0.6.0, TeX Live 2026, lualatex; `pdftotext -bbox` `yMin` of the body
+  text, one-frame MWE):
 
   | frame options | `yMin` |
   |---|---|
-  | none, `[b]`, `[t]` | 135.76 — all three identical, i.e. centred |
+  | none, `[b]`, `[t]` | 135.76 — all identical, i.e. centred |
   | `[vertical-alignment=bottom]` | 247.96 |
   | `[vertical-alignment=top]`, `[…=stretch]` | 23.57 |
-- **The silence is conditional, and that is the nasty part.** A lone bare word, or a list of
-  nothing but bare words, is thrown away without a word. Put *any* `key=value` in the same
-  list and every bare word in it becomes a hard `! LaTeX Error: The key 'talk/frame/b' is
-  unknown` that stops the build. So `[b]` is silent, `[b,label=x]` is loud, and converting
-  `[t,fragile]` turns a working deck into a failing one — `convert_deck.py` warns when it
-  leaves such a word behind.
-- **It cannot be fixed from the preamble.** Defining `b`/`t`/`c` as real keys in the class's
-  own family —
+
+- **The silence is conditional.** A list of nothing but bare words is discarded. Add any
+  `key=value` to the same list and every bare word becomes
+  `! LaTeX Error: The key 'talk/frame/b' is unknown` and stops the build. `[b]` is silent,
+  `[b,label=x]` is loud, and converting `[t,fragile]` turns a working deck into a failing
+  one. `convert_deck.py` warns when it leaves such a word behind.
+- **No preamble fix exists.** Defining the missing key in the class's own family does not
+  work:
 
   ```latex
   \ExplSyntaxOn
@@ -176,16 +174,16 @@ records what would let it move up, or disappear.
   \ExplSyntaxOff
   ```
 
-  — does **not** work. `[b]` still comes out centred (`yMin` 135.76); `[b,name=zz]` moves to
-  247.96. The key exists and is still ignored, because the list is never parsed. `\let` and
-  friends cannot help either: the option list is grabbed by `\begin{frame}`'s own argument
-  spec. The only preamble-side fix is to `\RenewDocumentEnvironment{frame}` outright, which
-  means re-implementing the class's definition — it branches on `frame-title-arg` and calls
-  the private `\__talk_frame_process:nn` — and re-doing it at every ltx-talk release. Rewrite
-  the source instead.
-- **Not backwards compatible with Beamer, but loudly so.** `\begin{frame}[vertical-alignment=bottom]`
-  under `\documentclass{beamer}` gives `! Package keyval Error: vertical-alignment undefined`
-  and exit 1. A deck that must still build both ways needs four lines on the Beamer side:
+  `[b]` still gives `yMin` 135.76; `[b,name=zz]` gives 247.96. The key exists and is ignored,
+  because the list is never parsed. `\let` cannot help — `\begin{frame}`'s own argument spec
+  grabs the list. The only preamble-side fix is `\RenewDocumentEnvironment{frame}`, which
+  means reimplementing a definition that branches on `frame-title-arg` and calls the private
+  `\__talk_frame_process:nn`, and redoing it every ltx-talk release. Rewrite the source.
+- **Not backwards compatible with Beamer, but loudly so.**
+  `\begin{frame}[vertical-alignment=bottom]` under `\documentclass{beamer}` gives
+  `! Package keyval Error: vertical-alignment undefined` and exit 1. Beamer parses frame
+  options with `keyval` unconditionally, so unlike ltx-talk it can be taught the key. A deck
+  that must build both ways needs four lines on the Beamer side:
 
   ```latex
   \makeatletter
@@ -195,81 +193,65 @@ records what would let it move up, or disappear.
   \makeatother
   ```
 
-  Beamer parses its frame options with `keyval` unconditionally, so unlike ltx-talk it can be
-  taught a new key. Measured (`yMin`, same MWE under beamer): `vertical-alignment=bottom`
-  255.31 = native `[b]`; `top` 29.43; `center` 116.38 = the default. `auto-break=true` gives
-  2 pages on an over-long frame, same as `allowframebreaks`; `stretch`→`s` is written by
-  analogy and not measured.
-- **On real decks** (a 28-deck course, ltx-talk 0.6.0, lualatex). Every deck converted with
-  no leftover bare option anywhere. Two rebuilt and compared against their own pre-rewrite
-  build:
+  Measured under beamer, same MWE: `vertical-alignment=bottom` `yMin` 255.31 = native `[b]`;
+  `top` 29.43; `center` 116.38 = the default; `auto-break=true` 2 pages, same as
+  `allowframebreaks`. `stretch`→`s` is written by analogy and not measured.
+- **On real decks** (a 28-deck course, ltx-talk 0.6.0, lualatex). Every deck converted with no
+  leftover bare option. Two rebuilt against their pre-rewrite build:
 
-  | deck | options rewritten | pages before → after | result |
+  | deck | options rewritten | pages | result |
   |---|---|---|---|
-  | the one with the `[b]` frame | 23 | 72 → 72 | exit 0, `Tagged: yes`, same words; the `[b]` frame's body moved from `yMin` 128.32 to 185.08 |
+  | the one with the `[b]` frame | 23 | 72 → 72 | exit 0, `Tagged: yes`, same words; that frame's body moved from `yMin` 128.32 to 185.08 |
   | the one with 3 `[t]` frames | 39 | 60 → 60 | exit 0, `Tagged: yes` |
-- **Frequency:** in the two courses converted here, the Beamer originals used only `c` (456
-  and 776), `t` (1 and 43), `b` (0 and 1) and `containsverbatim` (13 and 16). Nothing else.
-- **Detect before compiling:** `convert_deck.py --lint` reports `C-FRAME-OPT` for any frame
-  option list holding a bare item. Hand-written frames keep reintroducing them, so this is
-  the durable half of the fix.
-- **Revisit when:** ltx-talk parses its frame option list unconditionally, or errors on an
-  unknown bare word. 0.6.1's *"Refine implementation of frame property storage"* (upstream
-  #241) touches this machinery but **does not change the behaviour** — checked before it
-  reached TeX Live here.
+
+- **Frequency:** across the two courses the Beamer originals used only `c` (456 and 776),
+  `t` (1 and 43), `b` (0 and 1) and `containsverbatim` (13 and 16).
+- **Detect before compiling:** `convert_deck.py --lint` reports `C-FRAME-OPT` for any option
+  list holding a bare item. Hand-written frames keep reintroducing them.
+- **Revisit when:** ltx-talk parses the list unconditionally, or errors on an unknown bare
+  word. 0.6.1's *"Refine implementation of frame property storage"* (upstream #241) touches
+  this machinery but does not change the behaviour — checked before it reached TeX Live here.
 
 ## C-FRAMESUBTITLE — `\framesubtitle` typesets nothing  ⚠ silent, and documented upstream
 
-- **Symptom: none.** `\framesubtitle{…}` parses, absorbs its argument, and prints **nothing**.
-  The frame title renders normally, the layout is unchanged, the **page count is unchanged**, the
-  tag tree is sound, and the compiler says nothing at any log level. Every fidelity check this
-  skill runs — clean compile, matching page counts, `Tagged: yes`, 0 tagpdf errors — passes while
-  the text is gone. A `pdftotext` diff catches it only against the *Beamer* build; against
-  expectations it looks clean. Real cost: one lecture on a live course shipped with six
-  `\framesubtitle{Quiz}` and the word "Quiz" appearing **zero** times in the PDF.
-- **Cause (verified 2026-08-23, ltx-talk 0.5.3):** the class declares the token list, sets it, and
-  clears it, but **never reads it**. Three mentions in `ltx-talk.cls`, and that is all:
+- **Symptom:** none. `\framesubtitle{…}` parses, absorbs its argument and prints nothing. Frame
+  title, layout, page count and tag tree are all unchanged, and the compiler says nothing at
+  any log level. Every fidelity check in this skill passes while the text is gone; a
+  `pdftotext` diff catches it only against the Beamer build. One lecture on a live course
+  shipped with six `\framesubtitle{Quiz}` and the word "Quiz" appearing zero times in the PDF.
+- **Cause** (ltx-talk 0.5.3): the class declares the token list, sets it and clears it, but
+  never reads it. Three mentions in `ltx-talk.cls`:
   ```
    623:  \tl_gclear:N \g__talk_frame_subtitle_tl        % cleared at slide start
   1801:  \tl_new:N    \g__talk_frame_subtitle_tl        % declared
   1810:  \tl_gset:Nn  \g__talk_frame_subtitle_tl {#3}   % set by \framesubtitle
   ```
-  Compare `\g__talk_frame_title_tl`, which is *additionally* read at 811 (typeset by the
-  `frametitle` template) and 1855 (PDF bookmark). Both commands share the same signature and both
-  store their argument; only the title is ever consumed:
-  ```latex
-  \NewDocumentCommand \frametitle    { D <> { all } O {#3} m }
-    { \__talk_if_overlay:nT {#1} { \tl_gset:Nn \g__talk_frame_title_tl    {#3} } }
-  \NewDocumentCommand \framesubtitle { D <> { all } O {#3} m }
-    { \__talk_if_overlay:nT {#1} { \tl_gset:Nn \g__talk_frame_subtitle_tl {#3} } }
-  ```
-- ✅ **This is intended, and upstream says so.** Do **not** file an issue — `ltx-talk.pdf`,
-  §"Components of a frame → The frame title", states verbatim: *"Currently, the ⟨frame subtitle⟩
-  is not used in output: this will be addressed in later releases. The ⟨options⟩ for both commands
-  are currently unused."* It is a declared temporary gap, not a class bug.
-- **Workaround:** fold both parts into a single `\frametitle` via a macro in the shared preamble:
+  `\g__talk_frame_title_tl` is additionally read at 811 (typeset by the `frametitle` template)
+  and 1855 (PDF bookmark). Both commands share a signature and both store their argument; only
+  the title is consumed.
+- ✅ **Intended, and documented.** Do not file an issue. `ltx-talk.pdf`, §"Components of a frame
+  → The frame title": *"Currently, the ⟨frame subtitle⟩ is not used in output: this will be
+  addressed in later releases. The ⟨options⟩ for both commands are currently unused."*
+- **Workaround:** fold both parts into one `\frametitle` via a macro in the shared preamble:
   ```latex
   \newcommand{\frametitlesub}[2]{\frametitle{#1 --- {\normalsize #2}}}
   ```
-  then rewrite each adjacent pair `\frametitle{A}` + `\framesubtitle{B}` to `\frametitlesub{A}{B}`.
-  The **Beamer-side preamble can define the same macro** as a real `\frametitle` plus
-  `\framesubtitle`, so converted decks stay exportable back to Beamer — the same round-trip
-  property as the C-ALGO-CENTER workaround.
-- **Do NOT** redefine the class's own `\framesubtitle` to append to the title. That needs either
-  the private `\g__talk_frame_title_tl` or a wrapper mirroring `\frametitle`'s `D<>{all} O{#3} m`
-  signature, and both couple the deck to unstable internals — the same manual warns that "the
-  final form of the frame title interface is not decided".
-- **Finding them** — invisible to both the compiler and `pdftotext`, so this is a **source-only**
-  check. Covered by **`convert_deck.py --lint`** (rule `C-FRAMESUBTITLE`), which strips comments
-  first. By hand, do the same or commented-out frames produce false hits:
+  then rewrite each adjacent `\frametitle{A}` + `\framesubtitle{B}` pair to
+  `\frametitlesub{A}{B}`. The Beamer-side preamble can define the same macro as a real
+  `\frametitle` plus `\framesubtitle`, so converted decks stay exportable back to Beamer.
+- ⚠ **Do not redefine the class's `\framesubtitle` to append to the title.** That needs either
+  the private `\g__talk_frame_title_tl` or a wrapper mirroring `\frametitle`'s
+  `D<>{all} O{#3} m` signature; both couple the deck to internals the manual explicitly calls
+  unsettled.
+- **Detect before compiling:** invisible to the compiler and to `pdftotext`, so this is a
+  source-only check. `convert_deck.py --lint` (rule `C-FRAMESUBTITLE`) strips comments first;
+  by hand, do the same or commented-out frames give false hits:
   ```sh
   grep -nE '^[^%]*\\framesubtitle' deck.tex
   ```
-  The lint deliberately does **not** fire on the line that *defines* a `\frametitlesub`
-  dual-compile shim, whose Beamer-side body legitimately contains `\framesubtitle`.
-- **Revisit when:** a later ltx-talk release typesets the subtitle. Watch the changelog for
-  `\framesubtitle`; at that point the `\frametitlesub` macro can be retired in favour of the
-  native command.
+  The lint does not fire on the line defining a `\frametitlesub` dual-compile shim, whose
+  Beamer-side body legitimately contains `\framesubtitle`.
+- **Revisit when:** a later release typesets the subtitle; `\frametitlesub` can then be retired.
 
 ## C-CENTER-ARG — `\center{…}` used as if it took an argument  ⚠ diagnosed nowhere near the fault
 
@@ -329,7 +311,7 @@ records what would let it move up, or disappear.
   pre-tagging build. Without it the class only half-initialises, so huge swathes of it
   (including its own `frame*` and font machinery) are never defined.
 - **Workaround:** activate it. Uncomment the metadata input (or add a literal
-  `\DocumentMetadata{…}`) as the very first line, before `\documentclass`. On the CS3033
+  `\DocumentMetadata{…}`) as the very first line, before `\documentclass`. On one real
   course this single-line change took three "totally broken" decks straight to
   `Tagged: yes`, page counts matching baseline.
 - **Detect before compiling:** `convert_deck.py` warns (`C-NO-DOCMETA`) during both `--lint`
@@ -374,21 +356,18 @@ records what would let it move up, or disappear.
 
 ## C-ONEPASS — a non-halting error caps the build at one pass  ⚠ silent, damage shows up elsewhere
 
-- **Symptom:** an error you were about to dismiss as cosmetic — most often
-  `! LaTeX Error: Command \foo already defined.` — quietly costs you every construct that
-  needs a converged multi-pass build. Cross-references render as `??`, `remember picture`
-  tikz anchors never resolve, TOC data stays stale, and MathML on formulas is absent. The
-  damage appears **nowhere near the error**, and often in a different file.
-- **Cause:** `-interaction=nonstopmode` keeps TeX going, so the run "succeeds" — but `latexmk`
+- **Symptom:** an error that looks cosmetic — most often
+  `! LaTeX Error: Command \foo already defined.` — costs every construct that needs a converged
+  multi-pass build. Cross-references render as `??`, `remember picture` anchors never resolve,
+  TOC data stays stale, MathML on formulas is absent. The damage appears nowhere near the
+  error, often in a different file.
+- **Cause:** `-interaction=nonstopmode` keeps TeX going, so the run "succeeds", but `latexmk`
   sees a non-zero outcome and stops:
-
   ```
   Latexmk: Errors, so I did not complete making targets
   ```
-
-  One pass. Everything that resolves on pass 2 or 3 is silently left unresolved.
+  One pass. Everything that resolves on pass 2 or 3 is left unresolved.
 - **Reproduction** (ltx-talk 0.6.0, TeX Live 2026):
-
   ```latex
   \DocumentMetadata{lang=en, pdfversion=2.0, tagging=on}
   \documentclass{ltx-talk}
@@ -408,32 +387,28 @@ records what would let it move up, or disappear.
   | `\newcommand\mapsfrom` | 12 | **1** | **`??`** |
   | `\providecommand\mapsfrom` | 0 | 3 | `2` |
 
-  Nothing else changed. The maths renders identically in both.
-- **Why this bites converted decks specifically:** a course preamble that predefines maths
-  symbols (`\newcommand\mapsfrom{…}` in a shared `ai-symbols.tex`) is fine under
-  Beamer/pdfTeX, where nothing defines them. Under ltx-talk with LuaTeX, `unicode-math`
-  already provides them and `\newcommand` refuses. On one real 20-deck course this fired in
-  **20 of 20 decks**, and **0 of 20** Beamer baselines.
-- **Workaround:** `\providecommand` for any symbol a full `unicode-math` stack might already
-  supply. For the general case: fix the error. There is no such thing as an error worth
-  leaving in a deck you intend to verify.
-- **Detect:** the deck's own `.log` says whether the build converged. After `latexmk` finishes:
+  Nothing else changed; the maths renders identically in both.
+- **Why converted decks hit this:** a course preamble that predefines maths symbols
+  (`\newcommand\mapsfrom{…}` in a shared symbols file) is fine under Beamer/pdfTeX, where
+  nothing defines them. Under ltx-talk with LuaTeX, `unicode-math` already provides them and
+  `\newcommand` refuses. On one 20-deck course this fired in **20 of 20 decks**, and 0 of 20
+  Beamer baselines.
+- **Workaround:** `\providecommand` for any symbol a full `unicode-math` stack might supply.
+  Otherwise, fix the error — there is no error worth leaving in a deck you intend to verify.
+- **Detect:** the deck's own `.log` says whether the build converged.
   ```sh
   grep -ciE 'Rerun to get|Label\(s\) may have changed' deck.log   # PRIMARY: did NOT converge
   grep -c 'Latexmk: Errors' build.log                            # latexmk gave up
-  grep -c 'There were undefined references' deck.log              # refs unresolved (see below)
+  grep -c 'There were undefined references' deck.log
   ```
-  All three must be 0, but ⚠ **they are not interchangeable — check the first.** A deck with no
-  forward references produces *no* undefined-reference warning while still being capped at one
-  pass. Measured on a real 98-page deck with the clash present: `Rerun to get… = 1`,
-  `There were undefined references = 0`. The rerun signal caught it; the undefined-reference
-  grep alone would have missed it entirely.
-
-  **Not lint-detectable:** the offending `\newcommand` usually lives in an `\input`-ed shared
-  preamble, which `convert_deck.py --lint` does not read.
-- ⚠ **"It produced a PDF with the right page count" is not evidence of a sound build.** The
-  broken build above emits a correct-looking, correctly-paginated, `Tagged: yes` PDF.
-- **Revisit when:** n/a — this is `latexmk` behaving correctly. The fix is to have no errors.
+  All three must be 0, but ⚠ **check the first** — they are not interchangeable. A deck with no
+  forward references produces no undefined-reference warning while still capped at one pass.
+  Measured on a 98-page deck with the clash present: `Rerun to get… = 1`,
+  `There were undefined references = 0`. **Not lint-detectable:** the offending `\newcommand`
+  usually lives in an `\input`-ed shared preamble, which `--lint` does not read.
+- ⚠ **A correct page count is not evidence of a sound build.** The broken build above emits a
+  correct-looking, correctly paginated, `Tagged: yes` PDF.
+- **Revisit when:** n/a — `latexmk` is behaving correctly. The fix is to have no errors.
 
 ## C-AND-TITLE — `\and` in a custom title page detonates  ⚠ 101 errors, none near the fault
 
@@ -730,17 +705,15 @@ records what would let it move up, or disappear.
 ## C-HANDOUT-MODE — mode-qualified overlay specs are only half implemented, so handouts stack every overlay
 
 - **Symptom:** nothing in the slides. The **handout** build prints every overlay of a frame
-  stacked on one page — a step-through built from `\only<1>{img1}` … `\only<4>{img4}` hands
-  the reader four images on top of one another. The build is green, the page count is the
-  expected one-per-frame, and a handout tag-soundness check passes. **Silent** — found
-  converting a 20-deck course, 120 live sites across 13 decks.
-- **Cause:** `ltx-talk.cls` parses Beamer's mode syntax (modes `article`/`handout`/
-  `projector`) but implements only part of the semantics. Beamer's
-  `\begin{frame}<handout:2>` means *hand out slide 2 of this frame*. Under ltx-talk it keeps
-  the frame and suppresses **every** `\only` inside it, leaving only the non-overlay text on
-  the page — it does not select overlay 2. Measured (two-overlay frame, `\only<1>{BLANK}` /
-  `\only<2>{FILLED}`, built with `\PassOptionsToClass{handout}{ltx-talk}`, verified
-  2026-08-12, ltx-talk 0.5.3):
+  stacked on one page, so a step-through built from `\only<1>{img1}` … `\only<4>{img4}` hands
+  the reader four images on top of one another. Build green, page count the expected
+  one-per-frame, handout tag-soundness check passes. Found converting a 20-deck course: 120
+  live sites across 13 decks.
+- **Cause:** `ltx-talk.cls` parses Beamer's mode syntax (`article`/`handout`/`projector`) but
+  implements only part of the semantics. Beamer's `\begin{frame}<handout:2>` means *hand out
+  slide 2 of this frame*; ltx-talk keeps the frame and suppresses every `\only` inside it,
+  leaving only the non-overlay text. Measured on a two-overlay frame (`\only<1>{BLANK}` /
+  `\only<2>{FILLED}`, built with `\PassOptionsToClass{handout}{ltx-talk}`, ltx-talk 0.5.3):
 
   | Source | Handout output |
   |---|---|
@@ -758,32 +731,27 @@ records what would let it move up, or disappear.
   \only<1| handout:0>{\includegraphics[...]{environments-blank.pdf}}
   \only<2| handout:1>{\includegraphics[...]{environments-full.pdf}}
   ```
-  Whitespace around `|` is trimmed, so either spacing works. **The trap:** marking only the
-  overlays to drop looks like the smaller edit and produces a **blank** frame — silently
-  worse than doing nothing. This is a per-frame judgement call, not a mechanical rewrite: a
-  genuine progressive build often *should* show every step in the handout. Also **different
-  from most of this catalogue**: `<handout:N>` works natively under Beamer, so a deck that
-  has to keep Beamer as an export target needs *different source* for the two backends —
-  worth flagging in a shared preamble maintained for both.
+  Whitespace around `|` is trimmed. ⚠ **Marking only the overlays to drop produces a blank
+  frame** — silently worse than doing nothing. This is a per-frame judgement, not a mechanical
+  rewrite: a genuine progressive build often should show every step in the handout. Unlike most
+  of this catalogue, `<handout:N>` works natively under Beamer, so a deck keeping Beamer as an
+  export target needs different source for the two backends.
 - **Detect:** `convert_deck.py --lint` flags every frame with 2+ `\only<n>{...}` sites and no
-  `handout:` qualifier anywhere in the frame (frame-level or per-`\only`) as `C-HANDOUT-MODE`.
-  It's advisory, not a rewrite — a genuine progressive build is a legitimate reason for the
-  finding to be a no-op, so it names the candidate frames for a human judgement call rather
-  than auto-annotating them (same reasoning as leaving `\onslide`→`\uncover` manual, see
-  CONTRIBUTING.md). It cannot confirm the bug itself, only flag candidates: **still build and
-  look at the handout, not just the slides** — a tag-soundness check on the handout PDF passes
-  regardless of this bug, and so does the slide build.
-- **Revisit when:** ltx-talk's mode-qualified overlay-spec parsing (article/handout/
-  projector) implements frame-level `<handout:N>` selection, not just suppression.
+  `handout:` qualifier anywhere in the frame. Advisory, not a rewrite: a genuine progressive
+  build is a legitimate reason for the finding to be a no-op, so it names candidate frames for
+  a human rather than auto-annotating them. It cannot confirm the bug — **build the handout and
+  look at it**, since a tag-soundness check on the handout passes regardless.
+- **Revisit when:** ltx-talk implements frame-level `<handout:N>` selection, not just
+  suppression.
 
 ## C-PDFTEX-MATH — pdfTeX corrupts every comma and period in the maths text layer  ⚠ silent, engine-dependent
 
-- **Symptom:** the slides render correctly, but the PDF *text layer* is wrong wherever there is
-  maths. Every comma extracts as `;`, every period as `:`, `\ldots` as `": : :"`, `\checkmark`
-  as the letter `X`. Nothing warns: clean compile, correct page count, `Tagged: yes`, 0 tagpdf
-  errors. Copy-paste, full-text search and any assistive technology reading the text layer
-  (rather than tagged `/ActualText`) get the corrupted version.
-- **Measured (2026-08-28, ltx-talk 0.6.0, TeX Live 2026)** — one frame, source
+- **Symptom:** the slides render correctly, but the PDF text layer is wrong wherever there is
+  maths: every comma extracts as `;`, every period as `:`, `\ldots` as `": : :"`, `\checkmark`
+  as `X`. Clean compile, correct page count, `Tagged: yes`, 0 tagpdf errors. Copy-paste,
+  full-text search, and any assistive technology reading the text layer rather than tagged
+  `/ActualText` get the corrupted version.
+- **Measured** (ltx-talk 0.6.0, TeX Live 2026) — one frame, source
   `Inline: $g(a, b, c)$ and $x.y$ and $p \ldots q$.`:
 
   | engine | `pdftotext` output |
@@ -793,57 +761,51 @@ records what would let it move up, or disappear.
   | LuaLaTeX | `Inline: 𝑔(𝑎, 𝑏, 𝑐) and 𝑥.𝑦 and 𝑝 … 𝑞.` |
 
   The Beamer original of the same source extracts correctly under pdfTeX, so the corruption
-  arrives with the class, not with the engine alone.
+  arrives with the class, not the engine alone.
 - **Cause:** `ltx-talk.cls` picks its maths font by engine. Under LuaTeX/XeTeX it loads
   `NewCMSansMath-Regular.otf` via `\setmathfont`; otherwise it falls back to
   `\RequirePackage{sansmathfonts}`, whose OML-encoded sans maths has wrong ToUnicode maps.
-- **Workaround:** build with **LuaLaTeX** — `latexmk -lualatex`, which `assets/Makefile` now
-  does. No source change is needed: this is purely a build-engine fix, so an already-converted
-  deck is repaired by rebuilding.
-- ⚠ **Not XeLaTeX.** XeTeX takes the same OpenType branch and fixes the text layer, but the
-  MathML generation is LuaTeX-only:
-
+- **Workaround:** build with **LuaLaTeX** — `latexmk -lualatex`, which `assets/Makefile` does.
+  No source change: an already-converted deck is repaired by rebuilding.
+- ⚠ **Not XeLaTeX.** XeTeX takes the same OpenType branch and fixes the text layer, but MathML
+  generation is LuaTeX-only:
   ```latex
   \sys_if_engine_luatex:TF
     { \RequirePackage { lua-unicode-math }
       \tagpdfsetup { math / mathml / luamml / load = true } }
     { \RequirePackage { unicode-math } }
   ```
-
-  Measured on the MWE above plus one display, `\[ f(x) = \sum_{i=1}^{n} a_i x^i \]`, after
-  **three passes** (`qpdf --qdf --object-streams=disable`, then `grep -ao '<math'`): LuaLaTeX
-  emits **4** `<math>` payloads, XeLaTeX **0** — `/Formula` elements with nothing inside them.
-  XeTeX also warns `tagpdf ... xetex doesn't support interword`. For tagged maths, LuaLaTeX is
-  the only correct choice.
-
-  ⚠ **Count passes before concluding anything here.** On a single pass *both* engines emit 0
-  payloads — the MathML only appears once the build converges. A one-pass build therefore makes
-  LuaLaTeX look no better than XeTeX. Note that a non-halting `!` error is enough to make
-  `latexmk` stop after one pass, so this is easy to hit by accident.
-- **Costs of the switch:** LuaLaTeX is slower, and font metrics shift slightly (a probe moved a
+  Measured on the MWE above plus `\[ f(x) = \sum_{i=1}^{n} a_i x^i \]`, after three passes
+  (`qpdf --qdf --object-streams=disable`, then `grep -ao '<math'`): LuaLaTeX emits **4**
+  `<math>` payloads, XeLaTeX **0** — `/Formula` elements with nothing inside them. XeTeX also
+  warns `tagpdf ... xetex doesn't support interword`. For tagged maths, LuaLaTeX is the only
+  correct choice.
+- ⚠ **Count passes before concluding anything here.** On a single pass both engines emit 0
+  payloads; the MathML appears only once the build converges, so a one-pass build makes
+  LuaLaTeX look no better than XeTeX. A non-halting `!` error is enough to cap the build at one
+  pass — see **C-ONEPASS**.
+- **Cost of the switch:** LuaLaTeX is slower, and font metrics shift slightly (a probe moved a
   measured x-position from 50.041 to 50.165), so a deck can reflow. Re-check page counts against
-  the pre-switch build after changing engine.
-- **Finding it:** extract the text layer and look for corrupted maths punctuation.
+  the pre-switch build.
+- **Detect:** extract the text layer and look for corrupted maths punctuation.
   ```sh
   pdftotext deck.pdf - | grep -n '[a-z]; [a-z]'
   ```
   `pdfinfo deck.pdf | grep Producer` says which engine actually built a given PDF.
 - **Revisit when:** ltx-talk gives the pdfTeX path a maths font with correct ToUnicode maps, or
-  drops the pdfTeX fallback. Verified present on 0.6.0 (2026-08-23).
+  drops the pdfTeX fallback. Verified present on 0.6.0.
 
 ## C-DISPLAY-DOLLAR — `$$…$$` silently outdents every list item after it  ⚠ silent, ltx-talk only
 
-- **Symptom:** in an `itemize`, every `\item` **after** a `$$…$$` display loses the list
-  indentation and renders flush with the frame margin. The items *before* it keep theirs, so
-  the list visibly splits in two. Nothing warns: clean compile, correct page count, sound tag
-  tree, `Tagged: yes`, and `pdftotext` returns the same words in the same order. **Render the
-  page to catch this.** `$$` also selects the wrong display skips, so vertical gaps around
-  equations come out uneven — cosmetic, unlike the outdent.
-- **Scale:** one real 20-lecture course had this in **16 of 24 decks across 164 sites** (worst
-  decks: 44, 23, 20 and 16 occurrences). It passed every gate and was found by eye, months
-  after conversion.
-- **Measured (2026-08-27, ltx-talk 0.5.3, TeX Live 2026)** — x-position of the item text in
-  points via `pdftotext -bbox`, same three-item list in each class:
+- **Symptom:** in an `itemize`, every `\item` after a `$$…$$` display loses its indentation and
+  renders flush with the frame margin, so the list visibly splits in two. Clean compile,
+  correct page count, sound tag tree, `Tagged: yes`, and `pdftotext` returns the same words in
+  the same order. **Render the page to catch this.** `$$` also selects the wrong display skips,
+  making vertical gaps uneven — cosmetic, unlike the outdent.
+- **Scale:** one 20-lecture course had this in **16 of 24 decks across 164 sites** (worst decks
+  44, 23, 20, 16). It passed every gate and was found by eye, months after conversion.
+- **Measured** (ltx-talk 0.5.3, TeX Live 2026) — x-position of the item text in points via
+  `pdftotext -bbox`, same three-item list in each class:
 
   | class | `$$…$$` | `\[…\]` |
   |---|---|---|
@@ -852,34 +814,29 @@ records what would let it move up, or disappear.
   | **`ltx-talk`** | **50.0 / 28.3 / 28.3** | 50.0 / 50.0 / 50.0 |
 
   Items 2 and 3 lose 21.7pt — exactly the `itemize` indent — and land on the frame margin.
-- **Cause: not pinned down.** The mechanism inside `ltx-talk.cls` is unknown; presumably its
-  list indentation is applied in a way raw `$$` bypasses and `\[…\]` does not. What *is*
-  established:
-  - **Not the tagging.** Reproduces identically under `\DocumentMetadata{tagging=off}`.
-  - **Not a local preamble.** Reproduces with the bare class, no packages.
-  - ⚠ **Not generic LaTeX `list` behaviour, and the `\parshape` explanation is WRONG.** It is
-    the first thing that comes to mind and it survives casual checking — but `article` uses the
-    same `list` machinery and is unaffected, which refutes it. Do not repeat it.
-- **Workaround:** spell display math `\[…\]`. **`convert_deck.py` now rewrites this
-  automatically** — it alternates `\[` and `\]` over the `$$` occurrences in file order,
-  skipping comments and verbatim bodies, and refuses to rewrite anything if the total count is
-  odd (a mismatched `\[`/`\]` would be worse than the original). Pure LaTeX, no ltx-talk
-  dependency, so the deck stays exportable back to Beamer. There is no reason to keep `$$` in
-  any deck.
-- **Finding them:** covered by **`convert_deck.py --lint`** (rule `C-DISPLAY-DOLLAR`), which
-  flags any unescaped `$$` outside comments and verbatim bodies.
+- **Cause: not pinned down.** Presumably ltx-talk applies its list indentation in a way raw
+  `$$` bypasses and `\[…\]` does not. What is established: not the tagging (reproduces under
+  `\DocumentMetadata{tagging=off}`), and not a local preamble (reproduces with the bare class, no packages).
+  ⚠ It is also **not** generic LaTeX `list` behaviour: the `\parshape` explanation is the first
+  thing that comes to mind and survives casual checking, but `article` uses the same `list`
+  machinery and is unaffected. Do not repeat it.
+- **Workaround:** spell display math `\[…\]`. `convert_deck.py` rewrites this automatically,
+  alternating `\[` and `\]` over the `$$` occurrences in file order, skipping comments and
+  verbatim bodies, and refusing to rewrite at all if the total count is odd. Pure LaTeX, so the
+  deck stays exportable back to Beamer. There is no reason to keep `$$` in any deck.
+- **Detect before compiling:** `convert_deck.py --lint` (rule `C-DISPLAY-DOLLAR`) flags any
+  unescaped `$$` outside comments and verbatim bodies.
   ```sh
   grep -nE '^[^%]*(^|[^\\])\$\$' deck.tex
   ```
 - ⚠ **Check the overfull-vbox count after converting.** The corrected display skips are
-  slightly *larger* than what `$$` produced, so a frame that was already tight can tip over.
-  Compare the count against the same deck before the rewrite, not against zero.
-- **Known limitation of any lexical pass:** `$a$$b$` — two adjacent inline maths with no space
-  — reads as a `$$` to the converter, to the lint, and to the grep above. Vanishingly rare; the
-  converter reports its pair count so it can be eyeballed.
-- **Revisit when:** filed upstream. This is a genuine class bug with a clean MWE and it is
-  **the best-evidenced item in the catalogue** — see issue #5's filing order, which puts it
-  first. Not reported to ltx-talk as of 2026-08-27.
+  slightly larger than what `$$` produced, so an already-tight frame can tip over. Compare
+  against the same deck before the rewrite, not against zero.
+- **Limitation of any lexical pass:** `$a$$b$` — two adjacent inline maths with no space —
+  reads as a `$$` to the converter, the lint and the grep. Rare; the converter reports its pair
+  count so it can be eyeballed.
+- **Revisit when:** filed upstream. Best-evidenced item in the catalogue, with a clean MWE;
+  issue #5 puts it first in the filing order. Not reported to ltx-talk as of 2026-08-27.
 
 ## C-DISPMATH-NEWLINE — `\\` after display math is invalid
 
@@ -1037,13 +994,13 @@ records what would let it move up, or disappear.
 
 ## C-BACKGROUND — no `\usebackgroundtemplate`  ⚠ every automated check passes while the slide is wrong
 
-- **Symptom:** `Undefined control sequence` at `\usebackgroundtemplate`. That is the easy part.
-  The hard part is the repair: these frames carry *white text over a dark image*, so a no-op
-  stub gives white text on a white page — clean compile, right page count, `Tagged: yes`,
-  matching `pdftotext`. Measured on the fixture: stubbed, the background page is **99% white**.
+- **Symptom:** `Undefined control sequence` at `\usebackgroundtemplate`. The error is the easy
+  part. These frames carry white text over a dark image, so a no-op stub gives white text on a
+  white page — clean compile, right page count, `Tagged: yes`, matching `pdftotext`. Measured
+  on the fixture: stubbed, the background page is **99% white**.
 - **Cause:** ltx-talk has no equivalent. It does its own page colour through the kernel's
-  `shipout/background` hook (`\__talk_pagecolor:n`), which is the correct layer for this.
-- **Workaround: define the command in the shared preamble. The decks are not edited at all.**
+  `shipout/background` hook (`\__talk_pagecolor:n`), which is the right layer for this.
+- **Workaround: define the command in the shared preamble; the decks are not edited at all.**
   Shipped in `assets/preamble-template.tex`:
   ```latex
   \ExplSyntaxOn
@@ -1059,21 +1016,20 @@ records what would let it move up, or disappear.
   }
   ```
   The deck keeps its `{ ... }` group, its `\usebackgroundtemplate` line and its own
-  `\includegraphics` call verbatim. Beamer's `\usebackgroundtemplate{}` reset idiom works too.
-  When ltx-talk grows a background interface, delete the block: every converted deck is already
-  correct, with nothing to reconvert. Same shape as C-TOC.
-- **Do NOT use an overlay tikz node.** It was the recipe here and it is wrong:
+  `\includegraphics` call verbatim; Beamer's `\usebackgroundtemplate{}` reset idiom works too.
+  When ltx-talk grows a background interface, delete the block and every converted deck is
+  already correct. Same shape as C-TOC.
+- ⚠ **Do not use an overlay tikz node.**
   ```latex
   \begin{tikzpicture}[remember picture,overlay]     % <- do not do this
     \node at (current page.center) {\includegraphics[width=\paperwidth]{img.pdf}};
   \end{tikzpicture}
   ```
-  It is not a background. It is ordinary **content** that draws outside its own bounding box,
-  so it paints in document order — over the header, which is where ltx-talk puts the frame
-  title. And `remember picture` + `current page` resolves through the `.aux`, so any error
-  anywhere in the deck that stops latexmk converging turns this frame into a misplaced image
-  with the body text on white — silently.
-- **Measured** (ltx-talk 0.6.0, themed deck with header and footer bars, 60 dpi render):
+  That is not a background. It is content that draws outside its own bounding box, so it
+  paints in document order — over the header, which is where ltx-talk puts the frame title.
+  `remember picture` + `current page` also resolves through the `.aux`, so any error that
+  stops latexmk converging leaves a misplaced image and body text on white, silently.
+- **Measured** (ltx-talk 0.6.0, themed deck with header and footer bars, 60 dpi):
 
   | recipe | header band still theme colour | frame title | needs a converged build |
   |---|---|---|---|
@@ -1081,33 +1037,27 @@ records what would let it move up, or disappear.
   | `shipout/background` hook | 98% | visible | no |
   | ordinary frame (control) | 98% | visible | — |
 
-  Page area covered by the image, against the Beamer original: Beamer 81%, hook 77%, tikz
-  87%. Beamer draws its background *under* the chrome; the hook matches, the tikz node does
-  not. On the fixture, white area per page — Beamer 0 / 0 / 95%, converted 0 / 0 / 96%.
+  Page area covered by the image, against the Beamer original: Beamer 81%, hook 77%, tikz 87%.
+  Beamer draws its background under the chrome; the hook matches, the tikz node does not. On
+  the fixture, white area per page — Beamer 0 / 0 / 95%, converted 0 / 0 / 96%.
 - **Three things the shim adds that the deck's own graphics call does not have.**
   - `artifact`. Without it the background enters the structure tree as a `/Figure` whose
-    `/Alt` is the **filename**, once per shipped page — a two-overlay frame gets two.
-    Measured on the fixture: 2 `/S /Figure` and 2 `/Alt` without it, **0 and 0** with it,
-    renders byte-identical. ⚠ `alt={}` does **not** do this — it still emits the figure with
-    the filename as its alt, contradicting `alt-text.md` rule 5. It is set through a macro
-    defined at top level because `\ExplSyntaxOn` does not survive being stored in hook code,
-    so `\keys_set:nn` cannot be written inline inside `\AddToHook` (10 errors if you try).
-  - `height=\paperheight`. Beamer scaled by width and cropped the overflow; under `\put`
-    there is no crop, so `width` alone leaves an image wider than the page short — **13% of
-    the page white** (measured, 21:9 image on a 16:9 page), under white text, which is
-    exactly the failure this entry exists to prevent. The cost is that a mismatched image is
-    stretched rather than cropped. For an aspect-matched image the question does not arise.
+    `/Alt` is the filename, once per shipped page — a two-overlay frame gets two. Fixture: 2
+    `/S /Figure` and 2 `/Alt` without it, **0 and 0** with it, renders byte-identical. It is
+    set through a macro defined at top level because `\ExplSyntaxOn` does not survive being
+    stored in hook code, so `\keys_set:nn` cannot go inline inside `\AddToHook` (10 errors).
+  - `height=\paperheight`. Beamer scaled by width and cropped the overflow; under `\put` there
+    is no crop, so `width` alone leaves an image wider than the page short — **13% of the page
+    white** (21:9 image on a 16:9 page), under white text. A mismatched image is stretched
+    rather than cropped, which is the accepted cost.
   - `\aftergroup`. Hook code is global, so without it the background leaks onto every later
-    frame; this reproduces the scope the Beamer original got from `{ ... }`. It covers every
-    overlay page of the frame — a single `\AddToHookNext` would cover only the first.
+    frame. It covers every overlay page of the frame; `\AddToHookNext` would cover only the
+    first.
 - **Detect before compiling:** `convert_deck.py --lint` reports `C-BACKGROUND` on any
-  `\usebackgroundtemplate`, to tell you the shim must be in the common preamble. It does
-  **not** rewrite the deck, because with the shim there is nothing to rewrite.
-- **Verify by rendering.** This entry is the strongest case in the catalogue for that rule.
-  Page count, `Tagged: yes`, 0 tagpdf errors and a clean text diff all passed on a slide that
-  had lost its title and most of its visible text.
-- **Revisit when:** ltx-talk gains a documented background-image interface of its own — at
-  which point the shim block is deleted and nothing else changes.
+  `\usebackgroundtemplate`, to say the shim must be in the common preamble. It does not
+  rewrite the deck, because with the shim there is nothing to rewrite.
+- **Revisit when:** ltx-talk gains a background-image interface of its own; the shim block is
+  then deleted and nothing else changes.
 
 ## C-EDITINSTANCE-EXPAND — template colour keys don't expand macros
 
@@ -1190,46 +1140,17 @@ records what would let it move up, or disappear.
 ## A-MATHALT — a checker calls maths "an undescribed image"; do NOT add `/Alt`  ⚠ the obvious fix is harmful
 
 - **Symptom:** the checker lists *"images without a description"* and points at slides whose
-  only "images" are `$x^2$`, `$\approx$`, a display. Confusing, because every
-  `\includegraphics` already has `alt=`.
+  only "images" are `$x^2$`, `$\approx$`, a display. Every `\includegraphics` already has
+  `alt=`.
 - **Cause: the checker, not the PDF.** Each maths group becomes a `/S /Formula`. PDF/UA-**1**
   wants `/Alt` on it; PDF/UA-**2** also accepts **MathML**, which is what LaTeX emits. A
   validator reporting this against a ua-2 document is applying a ua-1 rule.
-- ⚠ **Do NOT "fix" it with `\tagpdfsetup{math/alt/use}`.** Not because it is invalid —
-  ua-2 permits `/Alt` on a `Formula`, so a document carrying it still conforms — but because
-  it is *much worse in practice*. Both routes pass a validator; only one is usable. A screen
-  reader that finds `/Alt` reads that string instead of parsing the MathML with MathCat, so
-  you trade a navigable formula for
-  `"LaTeX formula starts \begin {math} A \end {math} LaTeX formula ends"`.
-  `latex-lab` auto-enables the switch for `ua-1` and leaves it off for `ua-2`
-  (`latex-lab-math.ltx`, the `begindocument/end` hook). Earlier versions of this catalogue
-  told you to override that default, which was wrong.
-- **Verified upstream, not here.** The precedence of MathML over `/Alt` is the published
-  position of the PDF Association's *Best Practice Guide: Math in PDF* (v1.0, PDF Association,
-  written by the LaTeX Project Liaison Working Group), and LaTeX Project members test the
-  combination with NVDA + MathCat. Confirmed by ltx-talk upstream on PR #21. We have not
-  reproduced it locally: screen-reader support for maths is Windows-only at present. The
-  measurements below are ours and stand on their own.
-- **Not pursued: a per-formula, human-written `/Alt`.** The obvious wish is a
-  `\altmath{a polynomial of degree n}{f(x)=\sum…}` — a real sentence rather than source read
-  aloud. latex-lab *does* pass `alt = \l__math_content_alt_tl` to `\tag_struct_begin:n` for
-  every `Formula`, filled from `\l__math_content_template_tl` (the `LaTeX~formula~starts~…`
-  boilerplate), so the slot exists. Three routes, none taken:
-  1. set the private `\l__math_content_alt_tl` directly — works until latex-lab's own plug
-     overwrites it, i.e. the `\g__talk_frame_subtitle_tl` trap in **C-FRAMESUBTITLE** again;
-  2. define a custom plug for the `math/content` socket — the *supported* extension point
-     (same socket/plug layer as the `tikzpicture` `alt` key), and the right way if it is ever
-     wanted;
-  3. MathML `intent` attributes (`latex-lab-mathintent.ltx`, v0.1c) — semantically correct
-     and it enriches the MathML instead of competing with it, but LuaTeX-only and it annotates
-     *nodes*, not whole formulas.
-
-  Deliberately deferred: MathML already reads the maths correctly, and a hand-written `/Alt`
-  would plausibly shadow it exactly as the generated one does — which would have to be settled
-  upstream before any of this is worth building. Revisit only if a public per-formula interface
-  appears, or if the shadowing claim is disproved.
-- **What to do instead:** nothing in the source. Verify the MathML is actually there, and
-  validate against ua-2 rather than ua-1.
+- ⚠ **Do NOT set `\tagpdfsetup{math/alt/use}`.** It is valid — ua-2 permits `/Alt` on a
+  `Formula` — but a screen reader that finds `/Alt` reads that string instead of parsing the
+  MathML with MathCat, so a navigable formula becomes
+  `"LaTeX formula starts \begin {math} A \end {math} LaTeX formula ends"`. Both routes pass a
+  validator; only one is usable. `latex-lab` auto-enables the switch for `ua-1` and leaves it
+  off for `ua-2` (`latex-lab-math.ltx`, the `begindocument/end` hook), which is correct.
 - **Measured (ltx-talk 0.6.0, TeX Live 2026)** — one frame, `\[ f(x)=\sum_{i=1}^{n}a_ix^i \]`,
   three passes, `qpdf --qdf` then grep:
 
@@ -1238,86 +1159,82 @@ records what would let it move up, or disappear.
   | default (correct) | 1 | 0 | 6 |
   | `math/alt/use` | 1 | **1** | 6 |
 
-  Note the MathML is **not removed** by the switch — both files contain it. The harm is in
-  consumption: the `/Alt` shadows it for the screen reader. That last step is upstream's
-  account (ltx-talk issue #17), not something this catalogue has measured directly.
-- ⚠ **MathML is LuaTeX-only.** Under XeTeX and pdfTeX there is no MathML *and*, with this
-  switch correctly off, no `/Alt` either — the `Formula` elements are empty and the maths has
-  **no accessible representation at all**. Removing `math/alt/use` therefore makes LuaLaTeX a
-  hard requirement rather than a preference. See **C-PDFTEX-MATH**.
-- **Check:** `grep -c 'Alternative text for graphic is missing' deck.log` covers **graphics
-  only** and will not catch anything here. Look for `<math` in `qpdf --qdf` output instead —
-  that is the thing that must be present.
+  The switch does not remove the MathML; both files contain it. The harm is in consumption.
+- **The shadowing claim is upstream's, not ours.** MathML taking precedence over `/Alt` is the
+  published position of the PDF Association's *Best Practice Guide: Math in PDF* (v1.0,
+  written by the LaTeX Project Liaison Working Group), and LaTeX Project members test the
+  combination with NVDA + MathCat; confirmed by ltx-talk on PR #21 and issue #17. Not
+  reproduced here: screen-reader support for maths is Windows-only at present. The
+  measurements above are ours and stand on their own.
+- ⚠ **MathML is LuaTeX-only.** Under XeTeX and pdfTeX there is no MathML and, with this switch
+  correctly off, no `/Alt` either — the `Formula` elements are empty and the maths has **no
+  accessible representation at all**. That makes LuaLaTeX a hard requirement, not a
+  preference. See **C-PDFTEX-MATH**.
+- **What to do:** nothing in the source. Verify the MathML is present and validate against
+  ua-2 rather than ua-1.
+- **Check:** `grep -c 'Alternative text for graphic is missing' deck.log` covers graphics only
+  and catches nothing here. Look for `<math` in `qpdf --qdf` output instead.
 - **Revisit when:** validators catch up to PDF/UA-2. The document is already right.
 
 ---
 
 ## A-TABLE-TH — every `tabular` is a data table with no header cells
 
-- **Symptom:** *"this PDF contains tables that are missing headers"*, one report per
-  `tabular` in the deck — including the ones that are not tables at all.
-- **Cause:** `latex-lab` tags every `tabular` as `Table`/`TR`/`TD` and never guesses which
-  row or column is the header. Slide decks make this worse than papers do, because `tabular`
-  is routinely used for pure *layout*: a 2×2 quadrant of prose, a key/value list, a row of
-  images.
-- **Workaround:** classify each table, then declare it. The test is
-  **"does a cell still make sense read aloud on its own, with no column name attached?"**
-  - *No* → data table. Declare the headers **immediately before** `\begin{tabular}`:
+- **Symptom:** *"this PDF contains tables that are missing headers"*, one report per `tabular`,
+  including the ones that are not tables.
+- **Cause:** `latex-lab` tags every `tabular` as `Table`/`TR`/`TD` and never guesses which row
+  or column is the header. Decks make this worse than papers do, because `tabular` is routinely
+  used for layout: a 2×2 quadrant of prose, a key/value list, a row of images.
+- **Workaround:** classify each table, then declare it. The test: *does a cell still make sense
+  read aloud on its own, with no column name attached?*
+  - **No → data table.** Declare the headers immediately before `\begin{tabular}`:
     ```latex
     \tagpdfsetup{table/header-rows={1}}                              % header row
     \tagpdfsetup{table/header-rows={1,2},table/header-columns={1,2}} % both axes
     ```
-    Multi-level headers work, and the label column need not be column 1
-    (`header-columns={4}` is fine). `\multicolumn`/`\multirow` spans are honoured: the
-    emitted `/TH` carry correct `/TH-col`, `/TH-row`, `/TH-both` and `colspan-N`.
-  - *Yes* → layout grid. **Do not invent a header row.** Demote it out of the tree:
+    Multi-level headers work and the label column need not be column 1
+    (`header-columns={4}` is fine). `\multicolumn`/`\multirow` spans are honoured: the emitted
+    `/TH` carry correct `/TH-col`, `/TH-row`, `/TH-both` and `colspan-N`.
+  - **Yes → layout grid.** Do not invent a header row. Demote it out of the tree:
     ```latex
     \tagpdfsetup{table/tagging=div}
     ```
-    which retags `Table`→`Div`, `TR`→`NonStruct`, `TD`→ a text block. The grid leaves the
-    semantic tree entirely and the cells are simply read in visual order.
-    (`table/tagging=presentation` keeps `Table`/`TR`/`TD` plus an ARIA presentation
-    attribute — weaker, and some checkers still complain. Prefer `div`.)
-- ⚠ **Every declaration must state all three keys — these settings leak.** Nothing resets
-  them at `\end{tabular}`:
-  - `table/tagging=div` swaps the tag names and **nothing swaps them back**. The
-    `header-rows`/`header-columns` keys do *not* restore them, so one layout table silently
-    demotes every later table in the same group to `Div`.
-  - `table/tagging=true` restores the names but does **not** clear the header lists, so the
-    previous table's `header-rows={1,2}` leaks into the next one.
-
-  So write every data table as order-independent, with empty lists where not wanted:
+    which retags `Table`→`Div`, `TR`→`NonStruct`, `TD`→ a text block; the cells are then read
+    in visual order. (`table/tagging=presentation` keeps `Table`/`TR`/`TD` plus an ARIA
+    presentation attribute — weaker, and some checkers still complain. Prefer `div`.)
+- ⚠ **These settings leak; every declaration must state all three keys.** Nothing resets them
+  at `\end{tabular}`. `table/tagging=div` swaps the tag names and nothing swaps them back, so
+  one layout table demotes every later table in the same group. `table/tagging=true` restores
+  the names but does not clear the header lists, so the previous table's `header-rows={1,2}`
+  leaks into the next. Write every data table order-independently:
   ```latex
   \tagpdfsetup{table/tagging=true,table/header-rows={1},table/header-columns={}}
   ```
-  (`div` clears both lists itself, so it needs no extra keys.) Getting this wrong cost 7
-  mis-tagged tables across two decks on the course above, and **the build stays green**:
-  clean compile, `Tagged: yes`, 0 tagpdf errors. Only counting the structure elements
-  catches it.
-- ⚠ **A `tabular` inside a `frame*` is not tagged at all** — no `Table`, no `TD`, no `TH`,
-  and your `\tagpdfsetup` there is inert. The `frame*` tagging hooks (C-FRAMESTAR-TAG) wrap
-  the whole environment in `\tag_stop:`, so *everything* on a listing slide is invisible to a
-  screen reader, tables included. Don't chase it as a table bug; it is the known cost of
-  C-FRAMESTAR-TAG. Either leave the declaration in place (it becomes correct the moment
-  `frame*` tagging is fixed — say so in the comment) or move the table out of the `frame*`.
-- **Scale, and a warning:** on a 20-deck course, 47 live tabulars — 9 layout, 35 taggable
-  data tables, 3 stranded inside `frame*` — and **18 of the data ones needed *both* axes**
-  (payoff matrices, joint probability tables, quiz grids). A "first row is bold" heuristic
-  classified most of those 18 wrongly. Render the slide and look at it; the header rows that
-  matter most are often not bold.
-  Also: a plain `grep -c 'begin{tabular}'` badly overcounts — on that course 36 of 83 hits
-  were inside commented-out slides. Strip comments before auditing.
-- **Check — build an oracle *before* you apply.** From the audit, write down the expected
-  number of data tables per deck; after the build, count what is actually in the PDF and
-  compare. Nothing else catches the leak above.
+  (`div` clears both lists itself.) Getting this wrong cost 7 mis-tagged tables across two
+  decks, and the build stays green: clean compile, `Tagged: yes`, 0 tagpdf errors. Only
+  counting structure elements catches it.
+- ⚠ **A `tabular` inside a `frame*` is not tagged at all** — no `Table`, no `TD`, no `TH`, and
+  `\tagpdfsetup` there is inert. The `frame*` hooks (C-FRAMESTAR-TAG) wrap the environment in
+  `\tag_stop:`, so everything on a listing slide is invisible to a screen reader, tables
+  included. This is the known cost of C-FRAMESTAR-TAG, not a table bug. Either leave the
+  declaration in place, with a comment saying it becomes correct when `frame*` tagging is
+  fixed, or move the table out of the `frame*`.
+- **Scale:** on a 20-deck course, 47 live tabulars — 9 layout, 35 taggable data tables, 3
+  stranded inside `frame*` — and **18 of the data ones needed both axes** (payoff matrices,
+  joint probability tables, quiz grids). A "first row is bold" heuristic classified most of
+  those 18 wrongly; the header rows that matter most are often not bold, so render the slide
+  and look. A plain `grep -c 'begin{tabular}'` also overcounts badly — 36 of 83 hits on that
+  course were inside commented-out slides. Strip comments before auditing.
+- **Check — build an oracle before you apply.** From the audit, write down the expected number
+  of data tables per deck; after the build, count what is in the PDF and compare. Nothing else
+  catches the leak above.
   ```sh
   qpdf --qdf --object-streams=disable deck.pdf qdf.pdf
   grep -acE '/S /Table' qdf.pdf ; grep -acE '/S /TH' qdf.pdf
   ```
-  ⚠ When globbing for the PDF, **exclude handouts**: `deck-handout.pdf` sorts *before*
-  `deck.pdf` (`-` < `.`), so `ls week*/deck-*.pdf | head -1` hands you a stale handout and a
-  confidently wrong answer. This is the "measure against a build that actually ran" trap
-  wearing a different hat.
+  ⚠ When globbing for the PDF, exclude handouts: `deck-handout.pdf` sorts before `deck.pdf`
+  (`-` < `.`), so `ls week*/deck-*.pdf | head -1` hands you a stale handout and a confidently
+  wrong answer.
 
 ---
 
@@ -1361,34 +1278,30 @@ records what would let it move up, or disappear.
 
 ## A-TIKZ-ALT — figures that are not `\includegraphics` are silently untagged  ⚠ invisible to every alt-text tool
 
-- **Symptom:** none. No warning, no checker complaint naming that figure, and it never
-  appears in an alt-text audit, because every alt tool in this skill matches
-  `\includegraphics`. A screen reader encounters nothing where the diagram is.
-- **Affects:** `tikzpicture`, `pgfplots` `axis`, and `\input{…}` of a generated figure
-  (xfig `.pdf_t`, `.pspdftex`, `.pgf`). On one 20-deck course this was **23 figures across
-  5 decks** that no gate could see, against zero missing `alt=` on `\includegraphics`.
-- **Why it is worse than a missing `alt=`:** tagpdf *warns* for a bare `\includegraphics`,
-  then falsely satisfies validators by using the filename as `/Alt` (see `alt-text.md`).
-  A `tikzpicture` produces no warning and no `/Alt` at all, so there is nothing to grep for
-  in the log and nothing to find in the PDF.
-- **The nastiest variant is the inputted figure.** An xfig `.pdf_t` is an
-  `\includegraphics{…}` wrapped in a LaTeX `picture` overlay, living in a *separate file*.
-  A linter that greps deck sources never sees that `\includegraphics`, so the figure is
-  absent from the alt-text debt rather than listed as missing. Do not "fix" it by editing the
-  `.pdf_t`, which is a generated artefact that xfig will overwrite. Wrap at the call site.
-- **Workaround for a `tikzpicture` or `pgfplots` axis: none needed.** `latex-lab` provides an
-  `alt` key on the environment itself, so the picture describes itself in place:
+- **Symptom:** none. No warning, no checker complaint naming the figure, and it never appears
+  in an alt-text audit, because every alt tool in this skill matches `\includegraphics`. A
+  screen reader encounters nothing where the diagram is.
+- **Affects:** `tikzpicture`, `pgfplots` `axis`, and `\input{…}` of a generated figure (xfig
+  `.pdf_t`, `.pspdftex`, `.pgf`). On one 20-deck course, 23 figures across 5 decks that no
+  gate could see, against zero missing `alt=` on `\includegraphics`.
+- **Worse than a missing `alt=`.** tagpdf warns for a bare `\includegraphics` and then
+  falsely satisfies validators by using the filename as `/Alt` (see `alt-text.md`). A
+  `tikzpicture` produces no warning and no `/Alt`, so there is nothing to grep for in the log
+  and nothing to find in the PDF.
+- **Inputted figures are the nastiest case.** An xfig `.pdf_t` is an `\includegraphics`
+  wrapped in a `picture` overlay, in a separate file. A linter grepping deck sources never
+  sees it, so the figure is absent from the alt-text debt rather than listed as missing.
+- **`tikzpicture` and `pgfplots` need no wrapper.** `latex-lab` provides an `alt` key on the
+  environment:
   ```latex
   \begin{tikzpicture}[alt=A square joined to a circle by an arrow.]
   ```
-  This sets the `graphic/begin` socket to the `alt` plug (`latex-lab-testphase-graphic.sty`);
-  the default plug is `text`, which tags node content as marked content and produces no
-  description. Verified on ltx-talk 0.6.0: `/S /Figure` with the exact `/Alt`, 0 errors.
-  Earlier versions of this catalogue prescribed a bespoke `altfigure` wrapper here; that was
-  unnecessary, and upstream said so (ltx-talk issue #17).
-- **Workaround for an inputted figure (`.pdf_t`, `.pspdftex`, `.pgf`):** there is no
-  environment to key, so set the same `latex-lab` key at the call site and let the
-  `\includegraphics` *inside* the generated file pick it up:
+  This sets the `graphic/begin` socket to the `alt` plug
+  (`latex-lab-testphase-graphic.sty`); the default plug is `text`, which tags node content as
+  marked content and produces no description. Verified on ltx-talk 0.6.0: `/S /Figure` with
+  the exact `/Alt`, 0 errors.
+- **Inputted figures take the same key at the call site**, which the `\includegraphics` inside
+  the generated file picks up:
   ```latex
   \ExplSyntaxOn
   \NewDocumentCommand{\altinput}{ m m }
@@ -1398,24 +1311,9 @@ records what would let it move up, or disappear.
   ```latex
   \altinput{A generated diagram showing a labelled box.}{fig.pdf_t}
   ```
-  Do **not** edit the `.pdf_t` to add `alt=` — xfig regenerates it.
-- **The wrapper was not the mistake; its body was.** An inputted figure still needs something
-  at the call site. What was wrong is *how* the old `altfigure` did it: hand-writing
-  `\tagstructbegin{tag=Figure,alt={#1}}` builds a `Figure` around content `latex-lab` already
-  tags, so you get a `Figure` inside a `Figure` and the inner `picture` environments claim
-  their own placeholder `/Alt` of `"picture environment"`. Setting the key instead lets the
-  existing structure carry the description. Measured on the same inputted figure:
-
-  | wrapper body | `/Alt` entries | `/Figure` elements | junk alt |
-  |---|---|---|---|
-  | `\tagstructbegin{tag=Figure,alt={#1}}\tagmcbegin{}` | 3 | 5 | `"picture environment"` ×2 |
-  | `\keys_set:nn{tag/graphic}{alt={#1}}` | 2 | 4 | none |
-
-  The real description is still applied twice (once per `picture`), which is untidy but not
-  misleading.
-- **Upgrading a deck that already uses `altfigure`: change the definition, not the call
-  sites.** The environment already groups, so the key is scoped correctly by `\end{altfigure}`:
-
+  Do **not** add `alt=` inside the `.pdf_t` — xfig regenerates it.
+- **Decks that already use an `altfigure` wrapper: change the definition, not the call sites.**
+  The environment groups, so `\end{altfigure}` scopes the key:
   ```latex
   \ExplSyntaxOn
   \NewDocumentEnvironment{altfigure}{ m }
@@ -1423,89 +1321,79 @@ records what would let it move up, or disappear.
     { }
   \ExplSyntaxOff
   ```
-
-  Verified byte-identical to `\altinput` on the same figure: 4 `/Figure`, 2 `/Alt`, no junk.
-  One edit in the shared preamble fixes every `\begin{altfigure}` in a course. Remove the
-  wrapper from `tikzpicture`/`pgfplots` call sites, though — those take the `alt` key
-  directly and need none.
-- **General rule: do not hand-roll tag structure.** If `latex-lab` tags a construct, configure
-  it through its keys. Wrapping it in `\tagstructbegin`/`\tagmcbegin` nests inside what it
-  already built. The same error shows up on the title page in **A-HEADINGS** (`\tagstructbegin{tag=H1}`,
-  marked WRONG there for the same reason).
-- **Beamer side:** `\altinput` is ltx-talk-only. If the deck still dual-compiles, give the
-  Beamer preamble `\newcommand{\altinput}[2]{\input{#2}}`. The `alt` key on `tikzpicture` is
-  ignored harmlessly by Beamer, so it needs nothing.
-
-- **Check:** `alt_text_audit.py` reports these as `untagged_figure` findings. They cannot be
-  auto-fixed the way an optional argument can, so they belong on the manual worklist.
+  Byte-identical to `\altinput` on the same figure: 4 `/Figure`, 2 `/Alt`, no junk. One edit
+  in the shared preamble fixes every `\begin{altfigure}` in a course. Remove the wrapper from
+  `tikzpicture`/`pgfplots` call sites — those take the key directly.
+- ⚠ **Do not hand-roll tag structure.** Where `latex-lab` already tags a construct, configure
+  it through its keys. `\tagstructbegin{tag=Figure,alt={…}}` builds a `Figure` around content
+  that already has one, and the inner `picture` environments then claim a placeholder `/Alt`
+  of `"picture environment"`. The same mistake on the title page is marked WRONG in
+  **A-HEADINGS**.
+- **Beamer side:** `\altinput` is ltx-talk-only; give the Beamer preamble
+  `\newcommand{\altinput}[2]{\input{#2}}`. Beamer ignores the `alt` key on `tikzpicture`
+  harmlessly.
+- **Check:** `alt_text_audit.py` reports these as `untagged_figure`. They cannot be auto-fixed
+  the way an optional argument can, so they belong on the manual worklist.
 
 ---
 
 ## Quick error → cause map
 
-> ⚠ **The worst failures in this catalogue produce NO error at the offending line.**
-> Run **`convert_deck.py --lint`** before every build — it greps for all of these:
-> | Silent failure | Symptom | Entry |
-> |---|---|---|
-> | Nested-brace frame title left unconverted | frame has **no title**; text lands in the body | C-FRAMETITLE-NESTED |
-> | `\onslide<n>{…}` (braced) | blanks **everything after it to end of frame** on early overlays | C-ONSLIDE-ARG |
-> | `\State<2>` used as an overlay spec | overlay never fires; literal **`<2>` printed on the slide** | C-OVERLAY-ALGO |
-> | `\center{…}` used as a command | tag tree corrupts; error lands **far away**, or in another frame | C-CENTER-ARG |
-> | `\framesubtitle{…}` | text **never typeset**; page count unchanged, so every check passes | C-FRAMESUBTITLE |
-> | `$$…$$` display math | every `\item` **after** it loses its list indent | C-DISPLAY-DOLLAR |
-> | bare `[b]`/`[t]`/`[c]` frame option | discarded whole; every aligned frame renders **centred** | C-FRAME-OPT |
-> | `pdfstandard=` without `ua-2` | PDF declares **no PDF/UA conformance**; veraPDF fails ua2 clause 5 | C-NO-UA2 |
-> | `\includegraphics` without `alt=` | screen reader reads out **the filename** | see `alt-text.md` |
->
->
-> And five more that survive *every* check in this skill — clean compile, `Tagged: yes`,
-> 0 tagpdf errors — and are only caught by an actual PDF/UA checker, or by nobody at all:
-> | Silent failure | Symptom | Entry |
-> |---|---|---|
-> | frame titles roled `H4` by the class | "headings do not begin at level one" | A-HEADINGS |
-> | *(not a failure)* maths tagged with MathML and no `/Alt` | a ua-1 checker calls it "images without a description"; the file is correct | A-MATHALT |
-> | every `tabular` is a `Table` with no `TH` | "tables missing headers", including layout grids | A-TABLE-TH |
-> | saturated emphasis colours | "text with insufficient contrast" | A-CONTRAST |
-> | `tikzpicture` / `\input{…pdf_t}` figures | **no symptom at all** — absent from the reading order and from every audit | A-TIKZ-ALT |
->
-> The A-MATHALT row is in this table because a checker reports it, not because anything is
-> wrong. Do not "fix" it. Read the entry first.
->
-> And one that no check here catches at all, because the PDF is correct in every respect
-> except how it looks:
-> | Silent failure | Symptom | Entry |
-> |---|---|---|
-> | `algorithmic` wrapped in `center` | pseudocode centred line by line, **all indentation lost** | C-ALGO-CENTER |
->
-> Four of these are invisible to `pdftotext` as well as to the compiler: hidden overlay
-> content stays in the PDF text layer, and centred pseudocode keeps its word order.
-> **Render the page** (`pdftoppm -f N -l N -png`) to judge an overlay or an algorithm.
+⚠ **The worst failures here produce no error at the offending line.** Run
+`convert_deck.py --lint` before every build; it greps for all of the silent ones.
+
+**Silent — compiles clean, page count right, `Tagged: yes`.**
+
+| Silent failure | Symptom | Caught by | Entry |
+|---|---|---|---|
+| Nested-brace frame title left unconverted | frame has no title; text lands in the body | `--lint` | C-FRAMETITLE-NESTED |
+| `\onslide<n>{…}` (braced) | blanks everything after it to end of frame on early overlays | `--lint` | C-ONSLIDE-ARG |
+| `\State<2>` as an overlay spec | overlay never fires; literal `<2>` printed on the slide | `--lint` | C-OVERLAY-ALGO |
+| `\center{…}` as a command | tag tree corrupts; error lands far away, or in another frame | `--lint` | C-CENTER-ARG |
+| `\framesubtitle{…}` | text never typeset | `--lint` | C-FRAMESUBTITLE |
+| `$$…$$` display math | every `\item` after it loses its list indent | `--lint` | C-DISPLAY-DOLLAR |
+| bare `[b]`/`[t]`/`[c]` frame option | discarded whole; aligned frames render centred | `--lint` | C-FRAME-OPT |
+| `pdfstandard=` without `ua-2` | PDF declares no PDF/UA conformance | `--lint` | C-NO-UA2 |
+| `\includegraphics` without `alt=` | screen reader reads out the filename | log warning | `alt-text.md` |
+| frame titles roled `H4` by the class | "headings do not begin at level one" | PDF/UA checker | A-HEADINGS |
+| every `tabular` is a `Table` with no `TH` | "tables missing headers", including layout grids | PDF/UA checker | A-TABLE-TH |
+| saturated emphasis colours | "text with insufficient contrast" | PDF/UA checker | A-CONTRAST |
+| `tikzpicture` / `\input{…pdf_t}` figures | absent from the reading order | **nothing** | A-TIKZ-ALT |
+| `algorithmic` wrapped in `center` | pseudocode centred line by line, all indentation lost | **nothing** | C-ALGO-CENTER |
+
+Two cautions on that table. **A-MATHALT is not in it**: a ua-1 checker reports maths as
+"images without a description", but the file is correct and the fix is harmful — read the
+entry before acting on that report. And `pdftotext` cannot see four of these: hidden overlay
+content stays in the PDF text layer, and centred pseudocode keeps its word order. **Render the
+page** (`pdftoppm -f N -l N -png`) to judge an overlay or an algorithm.
+
+**Loud — the error text names the cause, once you know the mapping.**
 
 | Error text | Cause | Entry |
 |---|---|---|
 | `Improper \halign inside $$'s` | algpseudocodex algorithm | C-ALGO |
+| `You can't use \halign in math mode` | multi-line `\State{…\\…}` (algpseudocodex) | C-ALGO |
 | `tagpdf Error: no open structure on the stack` at `\end{frame*}` | `frame*` + `listings` under tagging | C-FRAMESTAR-TAG |
 | `Argument of \equal has an extra }` | nested `\Call` (classic algpseudocode) | C-CALL-NEST |
-| `Undefined control sequence \l__tag_name_float/algorithm_tl` | `algorithm` **float** | C-ALGO-FLOAT |
+| `Undefined control sequence \l__tag_name_float/algorithm_tl` | `algorithm` float | C-ALGO-FLOAT |
 | `Environment definition undefined` at `\begin{definition}` | no theorem envs | C-THEOREM |
-| Many `Undefined control sequence` (`\institute`, `\hypersetup`) + `\normalsize not defined` + `frame* undefined`; stub 2–8pp PDF | `\DocumentMetadata` never set (commented-out input) | C-NO-DOCMETA |
-| `Paragraph ended before \lst@next was complete` | `lstlisting` in a plain frame (verbatim frame not `frame*`, e.g. empty-title one missed) | C-VERBATIM |
+| Many `Undefined control sequence` (`\institute`, `\hypersetup`) + `\normalsize not defined` + `frame* undefined`; stub 2–8pp PDF | `\DocumentMetadata` never set | C-NO-DOCMETA |
+| `Paragraph ended before \lst@next was complete` | verbatim in a plain frame, not `frame*` | C-VERBATIM |
 | `Undefined control sequence \sc` / `\scshape invalid in math mode` | obsolete font commands | C-OLDFONT |
 | `Undefined control sequence \usebackgroundtemplate` | no background templates | C-BACKGROUND |
 | `Unknown color '\ThemeAccent'` (once per frame) | template key won't expand a macro | C-EDITINSTANCE-EXPAND |
-| `Command \columns already defined` | pasted the template's stubs; they're native | C-NATIVE-ENVS |
+| `Command \columns already defined` | pasted the template's stubs; they are native | C-NATIVE-ENVS |
 | `Improper \halign inside $'s` | overlay around `&`/`\\` in `tabular`/`align*` | C-OVERLAY-ALIGN |
-| `Extra alignment tab has been changed to \cr` | stacked `\only<N>{row}` table with no `\\` (relied on Beamer's per-page re-typesetting) | C-OVERLAY-MULTIPASS |
 | `Misplaced alignment tab character &` | overlay around `&` in `tabular` | C-OVERLAY-ALIGN |
-| `You can't use \halign in math mode` | multi-line `\State{…\\…}` (algpseudocodex) | C-ALGO |
-| `Missing \endcsname` / `Extra \endcsname` at `\end{frame}` | `\begin{block}`+algorithmic | C-BLOCK-ALGO |
+| `Extra alignment tab has been changed to \cr` | stacked `\only<N>{row}` table with no `\\` | C-OVERLAY-MULTIPASS |
+| `Missing \endcsname` / `Extra \endcsname` at `\end{frame}` | `\begin{block}` + algorithmic | C-BLOCK-ALGO |
 | `Missing \endcsname` / `Extra \endcsname` at `\end{frame}` | `\onslide{\State…}` in algorithmic | C-OVERLAY-ALGO |
 | `There's no line here to end` | `\\` after display math | C-DISPMATH-NEWLINE |
 | `tagpdf Error: … begin/end … differ` / `Sect can not be closed` | `\tableofcontents` | C-TOC |
-| `tagpdf Error: … begin/end text-unit para hooks differ` (line looks innocent) | `\center{…}` as a command | C-CENTER-ARG |
-| `Misplaced \crcr` in `\tbl_crcr:n` + `Missing }` (~100 errors, none at the title page) | `\and` typeset outside `\author` | C-AND-TITLE |
+| `tagpdf Error: … begin/end text-unit para hooks differ` (innocent-looking line) | `\center{…}` as a command | C-CENTER-ARG |
+| `Misplaced \crcr` in `\tbl_crcr:n` + `Missing }` (~100 errors, none at the title page) | `\and` outside `\author` | C-AND-TITLE |
 | `Not allowed in LR mode` at `\maketitle` | `frame-title-arg` option set | C-MAKETITLE |
 | frame title appears as body text | braced title, no `\frametitle` | C-FRAMETITLE |
-| `not compatible with \DocumentMetadata` | class still `beamer` | switch class |
-| `Paragraph ended before \lst@next…` | verbatim in normal frame | C-VERBATIM |
+| `not compatible with \DocumentMetadata` | class still `beamer` | switch the class |
 | `Undefined control sequence \setbeamer…` | Beamer styling command | C-NOBEAMER |
+
