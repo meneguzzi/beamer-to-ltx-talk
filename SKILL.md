@@ -43,55 +43,51 @@ Most are not in the upstream docs because they only surface under *tagging*
 >   (overlays, columns, templates). Use it for *how ltx-talk works*; use this skill for
 >   *how to convert*.
 
-> ### ⚠ Eight failures in this skill produce NO usable error message
-> They will not show up in a log (or point anywhere near the fault), and "it compiled" means
-> nothing. **`convert_deck.py --lint` greps for 1-4, 7 and 8 — run it before every build.**
-> (5 and 6 are alt-text findings: use `alt_text_audit.py`.)
-> 1. **Nested-brace frame titles** left unconverted → the frame has *no title*; the text
+> ### ⚠ Eight failures produce no usable error message
+> "It compiled" means nothing for any of these. **`convert_deck.py --lint` greps for 1–4, 7
+> and 8 — run it before every build.** 5 and 6 are alt-text findings: use `alt_text_audit.py`.
+> Each ID has the full account in `compromises.md`.
+>
+> 1. **Nested-brace frame titles** left unconverted → the frame has no title and the text
 >    renders as body text (C-FRAMETITLE-NESTED). Run `fix_frame_titles.py`, then grep.
-> 2. **`\onslide<2>{…}`** → ltx-talk's `\onslide` takes **no argument**, so this parses as a
->    *declaration* plus a stray group and blanks **everything after it to the end of the
->    frame** (C-ONSLIDE-ARG). The state lives in a *global* token list, so `tabular` cells and
->    other groups do **not** contain the leak. Use `\uncover<2>{…}` (reserves space) or
->    `\only<2>{…}` (does not). Bare `\onslide<2->` as a declaration is still valid.
-> 3. **`\State<2>`** used as an algorithm overlay spec → classic `algpseudocode` does not
->    accept it; the spec is typeset as **literal `<2>` text on the slide** and the overlay
->    never fires (C-OVERLAY-ALGO). Use `\State \uncover<2>{…}`.
-> 4. **`\center{…}`** used as if it took an argument → it is a *declaration*; under tagging it
->    leaks an unclosed paragraph and the error is reported **nowhere near** the offending line
+> 2. **`\onslide<2>{…}`** → `\onslide` takes no argument, so this parses as a declaration plus
+>    a stray group and blanks everything after it to the end of the frame (C-ONSLIDE-ARG). The
+>    state is a *global* token list, so `tabular` cells do not contain the leak. Use
+>    `\uncover<2>{…}` (reserves space) or `\only<2>{…}` (does not). Bare `\onslide<2->` as a
+>    declaration is still valid.
+> 3. **`\State<2>`** as an algorithm overlay spec → typeset as literal `<2>` on the slide; the
+>    overlay never fires (C-OVERLAY-ALGO). Use `\State \uncover<2>{…}`.
+> 4. **`\center{…}`** used as if it took an argument → it is a declaration; under tagging it
+>    leaks an unclosed paragraph and the error is reported nowhere near the offending line
 >    (C-CENTER-ARG). Cost a full day of bisection. Use `\begin{center}…\end{center}`.
-> 5. **Images without `alt=`** → a screen reader reads out *the filename*.
-> 6. **`tikzpicture` / `pgfplots` / `\input{…pdf_t}` figures** → untagged entirely, with **no
->    warning, no `/Alt`, and no checker complaint** (A-TIKZ-ALT). For a `tikzpicture` or a
->    `pgfplots` axis, pass the latex-lab `alt` key on the environment itself
->    (`\begin{tikzpicture}[alt=…]`). Inputted figures need `\altinput{…}{fig.pdf_t}`.
-> 7. **`\framesubtitle{…}`** → typesets **nothing**: ltx-talk sets the subtitle token list and
->    never reads it (C-FRAMESUBTITLE). The **page count is unchanged**, so a page-count
->    fidelity check passes while the text is gone. Documented upstream, so do not file it —
->    fold both parts into the title with `\frametitlesub{Title}{Subtitle}`.
-> 8. **`$$…$$` display math** → every `\item` *after* the display loses its list indentation
->    and renders flush with the frame margin (C-DISPLAY-DOLLAR). ltx-talk only — `article` and
->    `beamer` are both immune. `convert_deck.py` rewrites these to `\[…\]` automatically.
+> 5. **Images without `alt=`** → a screen reader reads out the filename.
+> 6. **`tikzpicture` / `pgfplots` / `\input{…pdf_t}` figures** → untagged entirely, with no
+>    warning, no `/Alt` and no checker complaint (A-TIKZ-ALT). Pass the latex-lab `alt` key on
+>    the environment (`\begin{tikzpicture}[alt=…]`); inputted figures need
+>    `\altinput{…}{fig.pdf_t}`.
+> 7. **`\framesubtitle{…}`** → typesets nothing, and the page count is unchanged, so a
+>    page-count check passes while the text is gone (C-FRAMESUBTITLE). Documented upstream, so
+>    do not file it; fold both parts into `\frametitlesub{Title}{Subtitle}`.
+> 8. **`$$…$$` display math** → every `\item` after the display loses its list indentation
+>    (C-DISPLAY-DOLLAR). ltx-talk only. `convert_deck.py` rewrites these to `\[…\]`.
 >
-> Also: **measure against a build that actually ran.** Beamer + `\DocumentMetadata` is fatal,
-> so a half-migrated repo can leave stale PDFs lying around, and `pdfinfo` will happily read
-> them and give you a confident, wrong baseline.
+> Three rules that follow from the above:
 >
-> And: **`Tagged: yes` is not a pass.** It says a tag tree exists, not that it is right. Four
-> further failures survive a clean compile, `Tagged: yes`, 0 tagpdf errors *and* complete alt
-> text — orphan `H4` frame titles, `tabular`s with no `TH`, sub-4.5:1 emphasis colours, and
-> untagged `tikzpicture`/inputted figures. Only a real PDF/UA checker finds the first three;
-> **nothing at all finds the fourth**, because those figures are missing from the tag tree
-> rather than wrong inside it. One is a one-line preamble fix: **put it in at Step 1**
-> (A-HEADINGS). See Step 6b.
->
-> But a checker complaint is not automatically a defect — some are the checker applying a
-> PDF/UA-**1** rule to a ua-2 document. "Maths has no description" is the standard example:
-> the ua-2 answer is MathML, not `/Alt`. See **A-MATHALT** before "fixing" it.
->
-> And **verify overlays by rendering pages, never with `pdftotext`** — hidden overlay content
-> stays in the PDF text layer, so extraction reports text that is invisible on the slide.
-> Use `pdftoppm -f N -l N -r 120 -png deck.pdf out` and look at the image.
+> - **`Tagged: yes` is not a pass.** It says a tag tree exists, not that it is right. Four
+>   failures survive a clean compile, `Tagged: yes`, 0 tagpdf errors *and* complete alt text:
+>   orphan `H4` frame titles (A-HEADINGS), `tabular`s with no `TH` (A-TABLE-TH), sub-4.5:1
+>   emphasis colours (A-CONTRAST), and untagged `tikzpicture`/inputted figures (A-TIKZ-ALT).
+>   A real PDF/UA checker finds the first three; **nothing finds the fourth**. A-HEADINGS is a
+>   one-line preamble fix — put it in at Step 1. See Step 6b.
+>   ⚠ But a checker complaint is not automatically a defect: some apply a PDF/UA-**1** rule to
+>   a ua-2 document. "Maths has no description" is the standard example, and the ua-2 answer is
+>   MathML, not `/Alt`. Read **A-MATHALT** before fixing it.
+> - **Verify overlays by rendering pages, never with `pdftotext`.** Hidden overlay content
+>   stays in the PDF text layer, so extraction reports text that is invisible on the slide.
+>   `pdftoppm -f N -l N -r 120 -png deck.pdf out`, then look at the image.
+> - **Measure against a build that actually ran.** Beamer + `\DocumentMetadata` is fatal, so a
+>   half-migrated repo leaves stale PDFs around and `pdfinfo` will read them and give you a
+>   confident, wrong baseline.
 
 ---
 
@@ -206,7 +202,7 @@ commented out (`% \input{../tag-commands.tex}`) from a pre-tagging build. Withou
 **half-loads** — a cascade of `Undefined control sequence` (`\institute`, `\hypersetup`,
 `frame*`) plus `\normalsize not defined`, and a 2–8-page stub PDF, none of it naming the
 cause (**C-NO-DOCMETA**). `convert_deck.py` warns when it is missing; uncomment the input. On
-CS3033 this one line fixed three otherwise-broken decks.
+one real course this one line fixed three otherwise-broken decks.
 
 Keep the `\DocumentMetadata{…}` block (it must be the very first thing, before
 `\documentclass`). **Prefer the modern `tagging=on` over the legacy `testphase={…}` list:**
@@ -456,95 +452,71 @@ slide. Generated alt text is a **draft for the author to review**, never a silen
 
 ## Step 6b — The accessibility-checker pass (Steps 1-6 are not sufficient)
 
-Alt text on the graphics is necessary and **not sufficient**. A course that passed every gate
-in this skill — clean compile, `Tagged: yes`, 0 tagpdf errors, every image described — was
-still rejected by a real PDF/UA checker on four counts. Read the **A-\*** section of
-`references/compromises.md`; all four are catalogued with verified fixes.
+Alt text on the graphics is necessary and not sufficient. A course that passed every gate in
+this skill — clean compile, `Tagged: yes`, 0 tagpdf errors, every image described — was still
+rejected by a real PDF/UA checker on four counts. Each is catalogued with a verified fix in the
+**A-\*** section of `references/compromises.md`; read the entry before acting.
 
 | Checker complaint | Cause | Fix |
 |---|---|---|
-| "headings do not begin at level one" | ltx-talk roles `frametitle` to `H4`, and a title page has no heading at all | `role/new-tag = frametitle / H2` + point the kernel's automatic paragraph tagger at `H1` — **A-HEADINGS**, do NOT hand-write `\tagstructbegin{tag=H1}` |
-| "images without a description", pointing at *maths* | the checker is applying a ua-**1** rule; under ua-2 maths is made accessible by MathML, not by `/Alt` | **nothing** — do not set `math/alt/use`; verify MathML is present instead, and validate against ua-2 — **A-MATHALT** |
+| "headings do not begin at level one" | ltx-talk roles `frametitle` to `H4`, and a title page has no heading at all | `role/new-tag = frametitle / H2`, plus the kernel's automatic paragraph tagger pointed at `H1` — **A-HEADINGS** |
+| "images without a description", pointing at *maths* | the checker is applying a ua-**1** rule; under ua-2 maths is made accessible by MathML, not `/Alt` | **nothing** — do not set `math/alt/use`; verify the MathML is present and validate against ua-2 — **A-MATHALT** |
 | "tables missing headers" | every `tabular` is tagged `Table`/`TR`/`TD`, never `TH` | classify each: `table/header-rows`/`header-columns`, or `table/tagging=div` for layout grids — **A-TABLE-TH** |
 | "text with insufficient contrast" | saturated emphasis colours are <4.5:1 on white | darken the palette *and* the raw `\color{red}` sites — **A-CONTRAST** |
-| *(no complaint at all)* | `tikzpicture`/`pgfplots`/`\input{…pdf_t}` figures are absent from the tag tree, so there is nothing for a checker to object to | `\begin{tikzpicture}[alt=…]` for pictures; `\altinput` for inputted figures — **A-TIKZ-ALT**, found by `alt_text_audit.py`, not by a checker |
+| *(no complaint at all)* | `tikzpicture`/`pgfplots`/`\input{…pdf_t}` figures are absent from the tag tree, so there is nothing to object to | `\begin{tikzpicture}[alt=…]`; `\altinput` for inputted figures — **A-TIKZ-ALT**, found by `alt_text_audit.py`, not by a checker |
 
-The first two are one-line preamble fixes that solve the whole course at once — **apply them
-in Step 1 and save yourself the round trip.** The last two need per-deck work.
+A-HEADINGS and A-MATHALT are settled in the preamble and solve the whole course at once —
+**apply them in Step 1 and save the round trip.** A-TABLE-TH and A-CONTRAST need per-deck work.
 
-> ⚠ **Blackboard's checker is not the bar — PDF/UA-2 is.** It is a *simplified* checker; a
-> deck can score near-perfect on it and still fail a real PDF/UA-2 validator. `verapdf`
-> (Homebrew: `verapdf`) runs the full profile locally:
+> ⚠ **Blackboard's checker is not the bar — PDF/UA-2 is.** It is a simplified checker; a deck
+> can score near-perfect on it and still fail a real PDF/UA-2 validator. `verapdf` runs the
+> full profile locally:
 > ```sh
 > verapdf -f ua2 --format text deck.pdf     # PASS/FAIL
 > verapdf -f ua2 --format mrr  deck.pdf     # full report, per-check
 > ```
-> The `-f ua2` here and the `ua-2` in `\DocumentMetadata` must agree: validating as ua2 a
-> file that never declared ua-2 fails on clause 5 before anything else (**C-NO-UA2**).
-> Run it before calling any A-\* fix done — Blackboard passing a deck does not mean it passes
-> `ua2`. This is how the A-HEADINGS title-tagging bug below was actually found.
+> The `-f ua2` and the `ua-2` in `\DocumentMetadata` must agree: validating as ua2 a file that
+> never declared ua-2 fails on clause 5 before anything else (**C-NO-UA2**). Run it before
+> calling any A-\* fix done.
 
-Three of these are structural rather than cosmetic, and all three need judgement you cannot
-fully script:
+Three points of judgement the scripts cannot make for you:
 
-- **Headings.** `role/new-tag = frametitle / H2` is genuinely one line and safe. The title's
-  `H1` is not: the obvious approach, hand-writing `\tagstructbegin{tag=H1}` around the title
-  text, compiles clean and passes Blackboard but **fails PDF/UA-2** (`Hn shall not contain
-  Part`/`P`). The title-page body is typically one long LaTeX paragraph, and the kernel's
-  *automatic* per-paragraph tagger fires on the first character actually typeset — landing its
-  own `Part → P` wrapper **inside** whatever manual struct is open, regardless of it. Do not
-  try to suppress the automatic tagger with `\tagpdfsetup{para/tagging=false}` either — that
-  key is meant to be set once at `\begin{document}`, and toggling it mid-paragraph desyncs the
-  kernel's own begin/end counters (worse: a dozen new tagpdf errors, not zero). The fix is to
-  let the automatic tagger produce the `H1` itself: force the title onto its own real
-  paragraph (`\par`, not `\\`) and set `\tagpdfsetup{para/tag=H1,para/flattened}` for exactly
-  that paragraph's lifetime. See A-HEADINGS in `references/compromises.md` for the full
-  mechanism and the working code, already in `assets/preamble-template.tex`.
-- **Tables.** The classifying question is *"does a cell still make sense read aloud on its
-  own, with no column name attached?"* If yes it is a layout grid — demote it with
-  `table/tagging=div` and **do not invent a header row**. If no it is a data table and needs
-  real `TH`, often on *both* axes. Do not trust a "first row is bold" heuristic: on a real
-  course it misclassified 18 of the most important tables (payoff matrices, joint probability
-  tables), whose header rows are not bold. Render the slide and look.
-
-  Two traps when you apply it, both of which leave the build **green**:
-  1. **The settings leak.** Nothing resets them at `\end{tabular}`, and the keys only
-     partially reset each other, so one `table/tagging=div` silently demotes every later
-     table in the group. Write each data table with all three keys —
-     `table/tagging=true,table/header-rows={1},table/header-columns={}` — so it is
-     order-independent.
-  2. **A `tabular` inside a `frame*` is not tagged at all**, and your `\tagpdfsetup` there is
-     inert — C-FRAMESTAR-TAG suspends tagging for the whole environment. Don't debug it as a
-     table problem.
-
-  So **build an oracle before you apply**: from the audit, write down the expected number of
-  data tables per deck, then count `/S /Table` and `/S /TH` in the built PDF and compare.
-  Nothing else catches either trap.
-- **Contrast.** Measure the rendered ink at **≥200 dpi** — at 70-90 dpi anti-aliasing invents
-  intermediate colours and hides the real ones. And expect at least one false positive: a
+- **Headings.** `role/new-tag = frametitle / H2` is one safe line. The title's `H1` is not:
+  hand-writing `\tagstructbegin{tag=H1}` compiles clean, passes Blackboard, and **fails
+  PDF/UA-2**. A-HEADINGS has the mechanism and the working code, already shipped in
+  `assets/preamble-template.tex`. Use it rather than rederiving it.
+- **Tables.** Classify by asking *"does a cell still make sense read aloud on its own, with no
+  column name attached?"* Yes → layout grid, demote with `table/tagging=div` and do not invent
+  a header row. No → data table, needs real `TH`, often on both axes. Do not trust a "first row
+  is bold" heuristic: on a real course it misclassified 18 of the most important tables, whose
+  header rows are not bold. Render the slide and look. ⚠ Two traps that leave the build green —
+  the settings leak between tables, and a `tabular` inside a `frame*` is not tagged at all — are
+  in A-TABLE-TH. **Build an oracle before you apply:** from the audit, write down the expected
+  number of data tables per deck, then count them in the built PDF. Nothing else catches either
+  trap.
+- **Contrast.** Measure the rendered ink at **≥200 dpi**; at 70–90 dpi anti-aliasing invents
+  intermediate colours and hides the real ones. Expect at least one false positive — a
   `\fcolorbox{black}{white}` gets reported although every pixel in it is ≥11:1.
 
-Then re-verify against the PDF structure itself, not the log:
+Then re-verify against the PDF structure, not the log:
 ```sh
 qpdf --qdf --object-streams=disable deck.pdf qdf.pdf
 grep -aoE '/S\s*/[A-Za-z0-9]+' qdf.pdf | tr -s ' ' | sort | uniq -c | sort -rn
 #   want: >= 1 /S /H1 ; frametitle roled one level below section ;
 #         /S /TH present wherever data tables are
-#   /S /Formula wants MathML, NOT /Alt -- see A-MATHALT. This grep cannot see
-#   MathML, so check it separately:
 strings qdf.pdf | grep -c '<math'          # > 0 if the deck has maths (LuaLaTeX only)
 verapdf -f ua2 --format text deck.pdf
-#   the qpdf/grep check above counts elements but can't see nesting —
-#   an H1 containing a stray Part/P (the A-HEADINGS manual-struct trap)
-#   still shows ">= 1 /S /H1" and passes it. Only a real validator catches that.
 ```
-⚠ When globbing for the PDF to check, **exclude handouts**: `deck-handout.pdf` sorts *before*
-`deck.pdf` (`-` < `.`), so `ls week*/deck-*.pdf | head -1` quietly hands you a stale handout —
-the "measure against a build that actually ran" trap in a new disguise. It cost a full
+The grep counts elements and cannot see nesting: an `H1` containing a stray `Part`/`P` still
+reports `>= 1 /S /H1`. Only the validator catches that. It also cannot see MathML, hence the
+separate `strings` check — and `/S /Formula` wants MathML, **not** `/Alt` (A-MATHALT).
+
+⚠ When globbing for the PDF, **exclude handouts**: `deck-handout.pdf` sorts before `deck.pdf`
+(`-` < `.`), so `ls week*/deck-*.pdf | head -1` hands you a stale handout. It cost a full
 false-negative round here: a change that had worked was reported as having done nothing.
 
 **Report contrast and table changes to the author.** Darkening a palette changes the look of
-every slide, and adding a header row changes what is *on* one — neither is a silent commit.
+every slide, and adding a header row changes what is on one. Neither is a silent commit.
 
 ## Step 7 — Conversion report (always deliver this)
 

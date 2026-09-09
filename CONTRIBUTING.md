@@ -46,6 +46,30 @@ so the bar for contributions is mostly "does this hold up against a real deck," 
 5. **Note the ltx-talk version** you tested against. The catalogue tracks this per-entry because
    ltx-talk is still experimental and behaviour shifts between releases.
 
+## Writing for this repo
+
+The documentation is the product here: `SKILL.md` and `references/compromises.md` are read by
+an agent doing a conversion, and by a person deciding whether to trust it. Both are damaged by
+padding, so keep the prose plain.
+
+- **Every sentence carries a fact.** A measurement, an error signature, a version, a reason.
+  Cut any sentence that only frames, restates, or announces what the next one says.
+- **State the finding, not the discovery.** "`[b]` renders centred" — not "what makes this
+  interesting is that `[b]` renders centred".
+- **Emphasis is information, so use it sparingly.** Bold a term the first time it is defined,
+  or a warning that changes what the reader does. Bold applied every other sentence means
+  nothing. The same goes for em-dash asides: if the aside matters, make it a sentence.
+- **Say what was measured and what was not.** Numbers, engine, ltx-talk version. Mark anything
+  reasoned-but-untested as such. Never present inference as a result.
+- **Say it once.** A fact belongs in exactly one file. `README.md` orients, `SKILL.md`
+  instructs, `references/compromises.md` is the evidence. Cross-reference by ID rather than
+  restating.
+- **Second person is for instructions only.** In the catalogue, describe the behaviour.
+
+This applies to AI-assisted contributions in particular: the failure mode is fluent,
+well-organised text at three times the length it needs, and it is the most common reason a
+documentation PR here gets sent back.
+
 ## What this project won't automate
 
 `convert_deck.py` deliberately does **not** auto-rewrite `\onslide<n>{…}` to `\uncover`/`\only`, even

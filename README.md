@@ -1,8 +1,10 @@
 # beamer-to-ltx-talk
 
-An [Agent Skill](https://agentskills.io) that converts existing LaTeX **Beamer** slide decks to the **ltx-talk** class, producing tagged, accessible PDF (PDF/UA, PDF/A). Built and tested with [Claude Code](https://claude.ai/code), but the `SKILL.md` format is an open, cross-tool standard. The [client list](https://agentskills.io/clients) includes Cursor, GitHub Copilot, Gemini CLI, Codex, and dozens of others. Point any compliant agent at this repo, or just ask any coding agent with file-read and shell access to follow `SKILL.md`.
+An [Agent Skill](https://agentskills.io) that converts existing LaTeX **Beamer** slide decks to the **ltx-talk** class, producing tagged, accessible PDF (PDF/UA, PDF/A).
 
 The guiding principle is **faithful, minimal, scripted change**: keep body content and slide order identical, rewrite only what the class change forces, and report every compromise made.
+
+Built and tested with [Claude Code](https://claude.ai/code), but `SKILL.md` is an open, cross-tool format — point any compliant agent at this repo, or ask any coding agent with file-read and shell access to follow it.
 
 ---
 
@@ -14,7 +16,7 @@ Beamer is [incompatible with `\DocumentMetadata`](https://github.com/josephwrigh
 - Native handout mode without per-deck edits
 - Clean `\EditInstance`-based theming instead of `\setbeamer*` commands
 
-The trade-off is that ltx-talk is still experimental and has known incompatibilities, most of which only surface under tagging. This skill encodes the fixes discovered converting two real courses: an 11-deck course and a 20-deck course.
+ltx-talk is still experimental, and most of its incompatibilities surface only under tagging. This skill encodes the fixes found converting two real courses, of 11 and 20 decks.
 
 ---
 
@@ -54,11 +56,7 @@ When you give a compatible agent a Beamer `.tex` file and ask to convert it, the
 
 ### Lint before you build
 
-The two costliest bugs in a real 20-deck migration were **invisible to the compiler**: a braced frame title renders as body text with no error at all, and `\center{…}` corrupts the PDF tag tree with an error reported nowhere near the offending line. Both are pure source greps needing no build:
-
-```sh
-python3 scripts/convert_deck.py deck.tex --lint    # exit 1 if anything is flagged
-```
+The two costliest bugs in a real 20-deck migration were invisible to the compiler: a braced frame title renders as body text with no error, and `\center{…}` corrupts the tag tree with the error reported nowhere near the cause. Both are source greps needing no build — see below.
 
 ---
 
@@ -111,65 +109,47 @@ Common beamer theme → accent colour mapping is in the template comments.
 
 ---
 
-## Known incompatibilities (summary)
+## Known incompatibilities
 
-Full details, including error signatures and workarounds, are in [`references/compromises.md`](references/compromises.md).
+Full details — error signatures, measurements, workarounds — are in
+[`references/compromises.md`](references/compromises.md), one entry per ID. This is the short
+orientation.
 
-**The worst failures produce no error at the offending line.** `--lint` catches the greppable ones (all but the first):
+**The worst failures produce no error at the offending line.** They compile clean, keep the
+right page count, report `Tagged: yes`, and are wrong on the slide. `--lint` catches the
+greppable ones before you spend a build:
 
-| ID | Silent failure | Fix |
-|---|---|---|
-| **C-ONSLIDE-ARG** | `\onslide<n>{…}` takes **no argument** in ltx-talk → the declaration leaks and blanks **everything after it to the end of the frame** on early overlays; 139 occurrences in one 11-deck course, invisible in every "builds clean" report | `\uncover<n>{…}` (reserves space) or `\only<n>{…}` (doesn't) |
-| **C-FRAMETITLE-NESTED** | Nested-brace title left unconverted → frame has **no title**, text lands in the body | Run `fix_frame_titles.py` |
-| **C-CENTER-ARG** | `\center{…}` used as a command → tag tree corrupts, error lands **far away** | `\begin{center}…\end{center}` |
-| **C-OVERLAY-ALGO** | `\State<2>` used as an overlay spec → **literal `<2>` printed on the slide**, overlay never fires | `\State \uncover<2>{…}` (not `\onslide`, see C-ONSLIDE-ARG) |
-| **C-FRAME-OPT** | ltx-talk's `frame` takes a **key-value** list, so Beamer's bare `[b]`/`[t]`/`[c]` are not options: the list is discarded whole and every aligned frame renders **centred**. Only silent while nothing in the list carries an `=` — `[b,label=x]` is a hard error | `vertical-alignment=bottom`/`top`/`center`; `convert_deck.py` rewrites them |
-| **C-NO-UA2** | `\DocumentMetadata{… pdfstandard=a-4 …}` declares PDF/**A**-4 and no PDF/UA level → the PDF makes **no PDF/UA claim** (no `pdfuaid:part`), so a checker may judge it under PDF/UA-1 | `pdfstandard={a-4,ua-2}` |
-| **C-NO-DOCMETA** | `\DocumentMetadata` shipped commented out → ltx-talk **half-loads**, cascading `Undefined control sequence` naming none of the real cause | Uncomment/add `\DocumentMetadata{…}` before `\documentclass` |
-| *(alt text)* | `\includegraphics` without `alt=` → screen reader reads out **the filename** | `alt_text_audit.py` |
-| **A-TIKZ-ALT** | `tikzpicture` / `pgfplots` / `\input{…pdf_t}` figures are untagged **entirely** — no warning, no `/Alt`, and no PDF/UA checker complains, because they are missing from the tag tree rather than wrong within it | `\begin{tikzpicture}[alt=…]`; `\altinput` for inputted figures; found by `alt_text_audit.py` as `untagged_figure` |
+```sh
+python3 scripts/convert_deck.py deck.tex --lint    # exit 1 if anything is flagged
+```
 
-⚠ Verify overlays by **rendering pages** (`pdftoppm -f N -l N -png`), never with `pdftotext`. Hidden overlay content stays in the PDF text layer, so text extraction reports content that isn't visible on the slide. This is how C-ONSLIDE-ARG and C-OVERLAY-ALGO were actually caught.
+The five that cost the most on a real migration:
 
-Failures that survive **all** of the above (clean compile, `Tagged: yes`, 0 tagpdf errors,
-every image described) and are found only by running a real PDF/UA checker (**Step 6b**):
+| ID | Silent failure |
+|---|---|
+| **C-ONSLIDE-ARG** | `\onslide<n>{…}` takes no argument, so the declaration leaks and blanks everything after it to the end of the frame — 139 occurrences in one 11-deck course |
+| **C-FRAMETITLE-NESTED** | nested-brace title left unconverted; the frame has no title and the text lands in the body |
+| **C-CENTER-ARG** | `\center{…}` used as a command corrupts the tag tree, and the error lands far from the cause |
+| **C-FRAME-OPT** | bare `[b]`/`[t]`/`[c]` frame options are discarded whole; every aligned frame renders centred |
+| **A-TIKZ-ALT** | `tikzpicture`/`pgfplots`/`\input{…pdf_t}` figures are untagged entirely — no warning, and no checker complains, because they are missing from the tag tree rather than wrong within it |
 
-| ID | Silent failure | Fix |
-|---|---|---|
-| **A-HEADINGS** | ltx-talk roles `frametitle` to `H4` and nothing is an `H1` → "headings do not begin at level one" | `role/new-tag = frametitle / H2`, tag the deck title `H1` |
-| **A-MATHALT** | a checker reports maths as undescribed images — but it is applying a PDF/UA-**1** rule; under ua-2 maths is made accessible by MathML | **do nothing.** Do *not* set `\tagpdfsetup{math/alt/use}`: the `/Alt` shadows the MathML for screen readers. Validate with `verapdf -f ua2` |
-| **A-TABLE-TH** | Every `tabular` is a `Table` with no `TH`, layout grids included, and the settings **leak** between tables | State all three keys per table (`table/tagging=…,header-rows=…,header-columns=…`), or `table/tagging=div`; `table_audit.py` |
-| **A-CONTRAST** | Saturated emphasis colours are <4.5:1 on white | Darken the palette **and** the raw `\color{red}` sites |
+⚠ **Verify overlays by rendering pages** (`pdftoppm -f N -l N -png`), never with `pdftotext`.
+Hidden overlay content stays in the PDF text layer, so extraction reports content that is not
+visible on the slide. That is how C-ONSLIDE-ARG and C-OVERLAY-ALGO were caught.
 
-The first two are one-line preamble fixes, already in `preamble-template.tex`.
+⚠ **A clean build is not a correct deck.** Four failures survive every gate in this skill —
+clean compile, `Tagged: yes`, 0 tagpdf errors, every image described — and are found only by
+running a real PDF/UA checker: A-HEADINGS, A-TABLE-TH, A-CONTRAST, and A-MATHALT. Read
+A-MATHALT before acting on it: the checker is wrong there, and the obvious fix makes the maths
+less accessible, not more.
 
-Errors the compiler *does* report:
+The catalogue also covers the errors the compiler does report, which are the easy half: the
+error text names the cause, and `compromises.md` opens with an error → cause → entry table.
 
-| ID | Issue | Workaround |
-|---|---|---|
-| **C-ALGO** ⚠️ | `algpseudocodex` cannot be typeset under tagging at all | Switch to classic `algorithmicx`/`algpseudocode[noend]` |
-| **C-FRAMESTAR-TAG** ⚠️ | `frame*` + `listings` corrupts the tag tree | `\tag_stop:`/`\tag_start:` hooks around the whole `frame*` |
-| **C-BLOCK-ALGO** ⚠️ | `\begin{block}` conflicts with `algorithmicx` | Define theorem-like envs with `tcolorbox` |
-| **C-TOC** | `\tableofcontents` corrupts the tag tree | Redefine `\section` to emit a divider frame (decks unchanged) |
-| **C-VERBATIM** | `containsverbatim`/`lstlisting` fail in `frame` | Use `frame*`: necessary but **not sufficient**, see C-FRAMESTAR-TAG |
-| **C-CALL-NEST** | Nested `\Call` breaks classic `algpseudocode` | `\algrenewcommand\Call[2]{\textproc{#1}(#2)}` |
-| **C-ALGO-FLOAT** | The `algorithm` float isn't registered for tagging | Drop the float; keep bare `algorithmic` |
-| **C-THEOREM** | No `definition`/`theorem`/… environments | Build them with `tcolorbox` |
-| **C-NATIVE-ENVS** | `columns`/`block` stubs clash with ltx-talk's native ones | Use the native envs; keep the template's stubs disabled |
-| **C-FRAMETITLE** | Braced frame titles render as body text | Use `\frametitle{…}` explicitly |
-| **C-MAKETITLE** | `frame-title-arg` breaks `\maketitle` | Don't use `frame-title-arg` |
-| **C-TITLEPAGE** | `\maketitle` fills frame; trailing text overlaps | Use `\coursetitlepage{}{}{}` |
-| **C-NOBEAMER** | All `\usetheme`/`\setbeamer*` are undefined | Rebuild styling with `\EditInstance` |
-| **C-BACKGROUND** ⚠️ | No `\usebackgroundtemplate`; a stub renders white on white | Define it in the shared preamble on the `shipout/background` hook (decks unchanged) |
-| **C-AND-TITLE** ⚠️ | `\and` typeset outside `\author` (e.g. in a custom title page) → **101 errors**, none near the fault (`Misplaced \crcr`) | `\renewcommand{\and}{\qquad}` for the duration of the title frame; already in `preamble-template.tex` |
-| **C-IMMATURE** | `block`/theorem envs are undocumented/incomplete (issues #205, #219); `media9` untested under tagging | Use sparingly; build theorems with `tcolorbox` (C-THEOREM) |
-| **C-OLDFONT** | `\sc`/`\it`/`\bf` undefined, and may sit inside maths | `\ifmmode`-guarded `\providecommand` stubs |
-| **C-EDITINSTANCE-EXPAND** | Template colour keys won't expand `\ThemeAccent` | Write the colour name out literally |
-| **C-OVERLAY-ALIGN** | Overlay tokens around `&`/`\\` break alignment | Wrap only the cell content |
-| **C-DISPMATH-NEWLINE** | `\\` after display math errors | Replace with `\vspace{…}` or a blank line |
-| **C-FONTS** | Maths is sans-serif by default | Re-point the four maths symbol fonts to Latin Modern |
-
-The catalogue is verified across **ltx-talk 0.5.0-0.5.2** (each entry in `compromises.md` notes the specific version it was checked against). Before converting, check the [ltx-talk changelog](https://github.com/josephwright/ltx-talk/blob/main/CHANGELOG.md) and [open issues](https://github.com/josephwright/ltx-talk/issues); some workarounds may no longer be needed.
+Each entry records the ltx-talk version it was checked against. Before converting, check the
+[ltx-talk changelog](https://github.com/josephwright/ltx-talk/blob/main/CHANGELOG.md) and
+[open issues](https://github.com/josephwright/ltx-talk/issues) — some workarounds may no longer
+be needed.
 
 ---
 
