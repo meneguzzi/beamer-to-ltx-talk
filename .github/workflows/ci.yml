@@ -76,12 +76,16 @@ jobs:
       - name: Toolchain versions
         run: |
           pdflatex --version | head -1
+          lualatex --version | head -1
           kpsewhich ltx-talk.cls || (echo "::error::ltx-talk.cls not found - TeX Live image is too old"; exit 1)
+          tlmgr info ltx-talk 2>/dev/null | grep -E 'cat-version' || true
 
-      # poppler-utils provides pdfinfo, which run_fixtures.sh uses to check
-      # the Tagged flag on after.tex. The texlive/texlive image doesn't ship it.
-      - name: Install poppler-utils
-        run: apt-get update && apt-get install -y poppler-utils
+      # poppler-utils provides pdfinfo (the Tagged flag) and pdftotext (the text
+      # layer and -bbox geometry the fixture assertions measure). qpdf is how
+      # they count structure elements and MathML payloads. The texlive/texlive
+      # image ships none of them.
+      - name: Install poppler-utils and qpdf
+        run: apt-get update && apt-get install -y poppler-utils qpdf
 
-      - name: Compile MWE fixtures (tests/fixtures/*/{before,after}.tex)
+      - name: Build and assert MWE fixtures (tests/fixtures/*/)
         run: bash tests/run_fixtures.sh

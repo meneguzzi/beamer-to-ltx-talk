@@ -1,0 +1,17 @@
+% The same source as after.tex, built with pdflatex instead of lualatex (see
+% fixture.conf). This is the defect: ltx-talk falls back to sansmathfonts, whose
+% OML-encoded sans maths has wrong ToUnicode maps, so the text layer is corrupt
+% and no MathML is emitted at all.
+%
+% assert-naive.sh asserts the corruption. If it ever fails, ltx-talk has given
+% the pdfTeX path a font with correct ToUnicode maps (or dropped the fallback) --
+% the entry's "revisit when" -- and the runner reports it as advisory.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+\begin{document}
+\begin{frame}
+\frametitle{Maths in the text layer}
+Inline: $g(a, b, c)$ and $x.y$ and $p \ldots q$.
+\[ f(x) = \sum_{i=1}^{n} a_i x^i \]
+\end{frame}
+\end{document}

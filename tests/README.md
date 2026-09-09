@@ -10,8 +10,13 @@ tracked and browsable in the repo itself.
 
 ```text
 tests/fixtures/<ID>/
-  before.tex   # minimal Beamer source that hits the problem
-  after.tex    # the same content converted, workaround applied
+  before.tex        # minimal Beamer source that hits the problem
+  after.tex         # the same content converted, workaround applied
+  naive.tex         # OPTIONAL: converted WITHOUT the workaround, i.e. the defect
+  assert-before.sh  # OPTIONAL: the property this conversion must preserve
+  assert-after.sh   # OPTIONAL: the same property, still there
+  assert-naive.sh   # OPTIONAL: the defect is present
+  fixture.conf      # OPTIONAL: engine and pass-count overrides
 ```
 
 `<ID>` is the catalogue ID from `compromises.md` (`C-ALGO`, `A-TIKZ-ALT`, …) or, for a bug
@@ -23,9 +28,12 @@ with no catalogue entry yet, the GitHub issue number (`ISSUE-2`).
   reduced to the smallest source that reproduces the symptom described in the matching
   catalogue entry — one frame, placeholder content, no unrelated packages.
 - **`after.tex`** is the same frame converted to `ltx-talk` with the entry's documented
-  workaround applied. It should compile clean and tagged
-  (`pdflatex` exits 0, `pdfinfo` reports `Tagged: yes`) against the ltx-talk version noted in
-  the catalogue entry.
+  workaround applied. It should compile clean and tagged (exit 0, `pdfinfo` reports
+  `Tagged: yes`) against the ltx-talk version noted in the catalogue entry.
+- **`naive.tex`** is the conversion done *without* the workaround — the defect itself. It is
+  what stops a fixture asserting something vacuous: without it, an assertion that passes shows
+  only that the property holds, not that it could ever have been lost. Add one wherever the
+  defect can be expressed in source.
 - Neither file needs a full preamble/theme — borrow the minimum from
   `../assets/preamble-template.tex`, not the whole thing.
 - **Head comments carry the diagnosis.** Each file opens with a comment saying what the
@@ -34,11 +42,62 @@ with no catalogue entry yet, the GitHub issue number (`ISSUE-2`).
   reader who lands here from a failing build should not have to go and find the catalogue
   entry to understand what they are looking at.
 
+## Assertions
+
+`run_fixtures.sh` always checks that every variant compiles and that `after.tex` is tagged.
+Those two checks are, deliberately, the exact pair this project exists to call insufficient:
+every silent-failure entry in the catalogue compiles clean and reports `Tagged: yes` while
+broken. So a fixture may carry assertions that look at what is actually in the PDF.
+
+A fixture's `assert-<variant>.sh` runs with the cwd set to the build directory and
+`tests/lib/assert.sh` available to source. It gets `FIXTURE_ID`, `VARIANT`, `ENGINE`, `PDF`
+and `LOG` in the environment. The library provides `must_contain` / `must_not_contain`,
+`must_share_xmin` / `must_differ_xmin` / `must_ymin_above` / `must_ymin_below` (via
+`pdftotext -bbox`), `must_have_pages`, `must_be_tagged`, `struct_count`,
+`must_have_mathml` / `must_have_no_mathml`, and `log_count`. Each failure message names the
+value observed, so a CI log says what was measured rather than only that something failed.
+
+**A failure means different things per variant, and that asymmetry is the point:**
+
+| variant | assertion says | on failure |
+|---|---|---|
+| `before.tex` | the property exists in the Beamer original | **hard** — the fixture itself is invalid |
+| `after.tex` | the workaround preserves it | **hard** — a regression, CI fails |
+| `naive.tex` | the defect is present | **advisory** — ltx-talk fixed it upstream; CI stays green and the run prints a retirement candidate |
+
+CI must break when one of our fixes stops working, and must *not* break when ltx-talk fixes
+something underneath us. The advisory results are how "which entries still reproduce on the
+installed ltx-talk?" becomes an answer the suite gives rather than prose someone maintains by
+hand (see #10).
+
+**The mutation check.** Where a fixture has both `naive.tex` and `assert-after.sh`, the runner
+also runs the *after* assertion against the *naive* build and requires it to **fail**. If it
+passes, that assertion cannot detect the defect its fixture exists for, and the fixture is
+reported as `VACUOUS ASSERTION` — a hard failure. This is the harness checking itself against
+its own original sin: an assertion of "compiles and `Tagged: yes`" passes every naive.tex in
+this directory, and would be caught here.
+
+`fixture.conf` overrides the build, `ENGINES` (default `lualatex`) and `PASSES` (default 1):
+
+```sh
+ENGINES="lualatex pdflatex"   # build and assert under each
+ENGINES_before="pdflatex"     # or per variant
+ENGINES_after="lualatex"
+ENGINES_naive="pdflatex"
+PASSES=3
+```
+
+The default engine is `lualatex` because that is what SKILL.md Step 3 requires; running the
+fixtures under `pdflatex` would validate them under an engine the skill tells users not to use.
+Per-variant engines exist because for some entries **the defect is the engine, not the source**
+— `C-PDFTEX-MATH` is one deck built three ways. `PASSES` exists because some properties only
+appear once the build converges: MathML payloads are absent on pass 1 under every engine, so a
+single-pass harness would "prove" LuaLaTeX no better than pdfTeX.
+
 ## What the suite can and cannot assert
 
-`run_fixtures.sh` checks that both files compile and that `after.tex` is tagged. That catches
-the compile-time compromises, but **most of this catalogue fails silently** — the whole reason
-it exists — so for those the green tick means only "the fixed version still builds", not "the
+Fixtures without assertions are still compile smoke-tests only, and **most of this catalogue
+fails silently** — so for those the green tick means "the fixed version still builds", not "the
 bug is caught". Verify the negative side by hand when adding a fixture, and record the result
 in the head comment. Measured for the current set:
 
@@ -47,13 +106,14 @@ in the head comment. Measured for the current set:
 | `C-FRAMESTAR-TAG` | exit 1, 2 tagpdf errors | **yes** — a genuine regression test |
 | `C-ALERTBLOCK` | literal `[` renders as the box title | no — visual |
 | `C-ONSLIDE-ARG` | overlay 1 renders **blank**; page count correct | no — visual |
-| `C-FRAMESUBTITLE` | subtitle text absent from the PDF | no — needs a `pdftotext` grep |
+| `C-FRAMESUBTITLE` | subtitle text absent from the PDF | **yes** — `assert-*.sh`, `pdftotext` grep |
 | `C-HANDOUT-MODE` | handout stacks all overlays on one page | no — handout build only |
-| `C-DISPLAY-DOLLAR` | items after the display outdent to the frame margin | no — needs `pdftotext -bbox` |
+| `C-DISPLAY-DOLLAR` | items after the display outdent to the frame margin | **yes** — `assert-*.sh`, `xMin` 50.165 vs 28.346 |
 | `C-FRAME-OPT` | `[b]` frame renders centred instead of bottom-aligned | no — needs `pdftotext -bbox` (`yMin` 135.76 vs 247.96) |
 | `C-FRAMETITLE`, `C-FRAMETITLE-NESTED` | title renders as body text, header bar empty | no — visual |
 | `C-TITLEPAGE` | **did not reproduce on 0.5.3** — see the fixture's head comment | n/a |
 | `C-BACKGROUND` | stubbed out, the background page is 99% white under white text; unscoped, it leaks onto page 3 | no — visual; sample the page, or count `/S /Figure` |
+| `C-PDFTEX-MATH` | maths punctuation corrupt in the text layer, no MathML | **yes** — `assert-*.sh`, three engines, 4 vs 0 MathML payloads |
 
 ⚠ **`pdftotext` cannot verify overlays.** ltx-talk typesets every overlay branch once and
 toggles visibility with PDF OCG layers, so hidden content is still present in the extracted
@@ -61,17 +121,18 @@ text. Extracting text from the `C-ONSLIDE-ARG` fixture gives *byte-identical* ou
 broken and fixed versions while one of them renders an entirely blank page. Render to an
 image (`pdftoppm -r 50 -png`) and look at it.
 
-There is currently **no convention for a fixture that must fail** — the runner asserts every
-`.tex` it finds compiles. Where the interesting artifact is a broken conversion (the naive
-`\[` inside `columns > column > center`, say), it lives in the catalogue entry rather than
-here.
+A fixture that must *fail* is spelled `naive.tex` plus an `assert-naive.sh` asserting the
+defect. Note it still has to **compile** — the runner requires that of every variant, and for
+a silent failure it is true by definition. A defect that cannot compile belongs in `before.tex`
+with the compile itself as the test (`C-FRAMESTAR-TAG`).
 
 ## Running them
 
 `.github/workflows/ci.yml`'s `latex-fixtures` job runs `run_fixtures.sh` on every push/PR,
 inside the `texlive/texlive:latest` container (Ubuntu's own `texlive` packages are too old to
-have `ltx-talk`). It compiles every `before.tex`/`after.tex`, and additionally checks
-`after.tex`'s PDF reports `Tagged: yes`.
+have `ltx-talk`). It builds every variant, checks `after.tex` reports `Tagged: yes`, and runs
+whatever assertions the fixtures carry. It needs `poppler-utils` (`pdfinfo`, `pdftotext`) and
+`qpdf`, which the container does not ship.
 
 Locally, with a TeX Live that has `ltx-talk` installed:
 

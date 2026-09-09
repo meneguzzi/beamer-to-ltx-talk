@@ -1,0 +1,12 @@
+% Beamer source. The point of this variant is that pdfTeX extracts this maths
+% CORRECTLY under beamer -- so the corruption in naive.tex arrives with the
+% ltx-talk class, not with the engine alone. Without this reference the fixture
+% would look like a pdfTeX bug.
+\documentclass[aspectratio=169]{beamer}
+\begin{document}
+\begin{frame}
+\frametitle{Maths in the text layer}
+Inline: $g(a, b, c)$ and $x.y$ and $p \ldots q$.
+\[ f(x) = \sum_{i=1}^{n} a_i x^i \]
+\end{frame}
+\end{document}
