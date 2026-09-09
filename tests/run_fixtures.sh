@@ -89,9 +89,10 @@ for dir in */; do
     [ -n "$variant_engines" ] || variant_engines="$ENGINES"
 
     for engine in $variant_engines; do
+      # Name the engine whenever the fixture configures engines at all, so a
+      # multi-engine fixture's lines are distinguishable in the CI log.
       label="$id/$variant.tex"
-      [ "$(printf '%s\n' $variant_engines | wc -w | tr -d ' ')" -gt 1 ] && label="$label ($engine)"
-      [ -n "${ENGINES_before}${ENGINES_after}${ENGINES_naive}" ] && label="$id/$variant.tex ($engine)"
+      if [ -f "$dir/fixture.conf" ]; then label="$label ($engine)"; fi
 
       workdir=$(mktemp -d)
       cp "$src" "$workdir/$variant.tex"
@@ -109,10 +110,12 @@ for dir in */; do
         pass=$((pass + 1))
       done
 
-      if [ "$ok" = 1 ] && [ "$variant" = "after" ] \
-         && ! pdfinfo "$workdir/$variant.pdf" 2>/dev/null | grep -q "^Tagged: *yes"; then
-        echo "FAIL: $label compiled but is not tagged"
-        status=1; ok=0
+      if [ "$ok" = 1 ] && [ "$variant" = "after" ]; then
+        info=$(pdfinfo "$workdir/$variant.pdf" 2>/dev/null)
+        if [[ "$info" != *"Tagged:"*"yes"* ]]; then
+          echo "FAIL: $label compiled but is not tagged"
+          status=1; ok=0
+        fi
       fi
 
       # The fixture's own assertion, if it has one.
@@ -125,10 +128,13 @@ for dir in */; do
           echo "OK: $label (assertion held)"
         elif [ "$variant" = "naive" ]; then
           echo "ADVISORY: $label -- the defect no longer reproduces under $engine."
-          echo "          If ltx-talk fixed it, retire the catalogue entry (CLAUDE.md says"
-          echo "          how) and delete this fixture. Not a build failure."
+          echo "          If ltx-talk fixed it, retire the catalogue entry and delete this"
+          echo "          fixture variant (see tests/README.md). Not a build failure."
           advisory+=("$id ($engine): defect no longer reproduces")
-          ok=0   # already reported; skip the plain OK line below
+          # 2. Not a real failure, but the plain OK line below must not print, and
+          # the mutation check below must NOT run: with the defect gone,
+          # assert-after.sh would pass on naive.tex and be misreported as vacuous.
+          ok=0
         else
           echo "FAIL: $label -- the assertion for this fixture no longer holds"
           status=1; ok=0

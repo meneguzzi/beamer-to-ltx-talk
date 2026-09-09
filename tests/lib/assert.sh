@@ -67,24 +67,20 @@ must_not_be_in_log() {
   [ "${n:-0}" -eq 0 ] || fail "log contains '$1' ($n time(s)); it must not"
 }
 
-# xmin_of "word" -- xMin of the first <word> whose text is exactly "word",
-# from pdftotext -bbox. Empty if the word is absent.
-xmin_of() {
-  pdftotext -bbox -q "$PDF" - 2>/dev/null \
-    | tr '>' '>\n' \
-    | grep -F ">$1" \
-    | head -1 \
-    | sed -n 's/.*xMin="\([0-9.]*\)".*/\1/p'
+# _word_line "word" -- the pdftotext -bbox <word> element whose text is EXACTLY
+# "word" (first occurrence). pdftotext emits one <word ...>text</word> per line,
+# so this is a line match. The closing tag is part of the pattern on purpose:
+# matching ">word" alone is a prefix match, and `xmin_of a` would silently
+# return the position of "agent".
+_word_line() {
+  pdftotext -bbox -q "$PDF" - 2>/dev/null | grep -F -m1 -- ">$1</word>"
 }
 
+# xmin_of "word" -- xMin of that word. Empty if the word is absent.
+xmin_of() { _word_line "$1" | sed -n 's/.*xMin="\([0-9.]*\)".*/\1/p'; }
+
 # ymin_of "word" -- likewise for yMin.
-ymin_of() {
-  pdftotext -bbox -q "$PDF" - 2>/dev/null \
-    | tr '>' '>\n' \
-    | grep -F ">$1" \
-    | head -1 \
-    | sed -n 's/.*yMin="\([0-9.]*\)".*/\1/p'
-}
+ymin_of() { _word_line "$1" | sed -n 's/.*yMin="\([0-9.]*\)".*/\1/p'; }
 
 # must_share_xmin tol word1 word2 [word3 ...] -- all named words start at the
 # same x within tol points. This is how a lost list indent is detected: the
