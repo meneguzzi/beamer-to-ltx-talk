@@ -110,7 +110,8 @@ in the head comment. Measured for the current set:
 | `C-HANDOUT-MODE` | handout stacks all overlays on one page | no — handout build only |
 | `C-DISPLAY-DOLLAR` | items after the display outdent to the frame margin | **yes** — `assert-*.sh`, `xMin` 50.165 vs 28.346 |
 | `C-FRAME-OPT` | `[b]` frame renders centred instead of bottom-aligned | no — needs `pdftotext -bbox` (`yMin` 135.76 vs 247.96) |
-| `C-FRAMETITLE`, `C-FRAMETITLE-NESTED` | title renders as body text, header bar empty | no — visual |
+| `C-FRAMETITLE` | title renders as body text, header bar empty | no — visual |
+| `C-FRAMETITLE-NESTED` | nested-brace title renders as body text, also behind an overlay spec | yes |
 | `C-TITLEPAGE` | **did not reproduce on 0.5.3** — see the fixture's head comment | n/a |
 | `C-BACKGROUND` | stubbed out, the background page is 99% white under white text; unscoped, it leaks onto page 3 | no — visual; sample the page, or count `/S /Figure` |
 | `C-PDFTEX-MATH` | maths punctuation corrupt in the text layer, no MathML | **yes** — `assert-*.sh`, three engines, 4 vs 0 MathML payloads |

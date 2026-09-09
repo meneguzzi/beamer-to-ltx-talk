@@ -1,0 +1,21 @@
+% The conversion WITHOUT the workaround: what convert_deck.py alone leaves
+% behind. Its title regex ([^{}]*) does not match a nested-brace title, so all
+% three headers keep their braced title, which ltx-talk renders as body text.
+% [c] and \sc are converted because those are convert_deck.py's job and it does
+% them; only the title fold is missing.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+
+\begin{document}
+\begin{frame}[vertical-alignment=center]{\only<1>{Example}\only<2>{Find a plan for}}
+Single braced title, nested.
+\end{frame}
+
+\begin{frame}[vertical-alignment=center]{Arc consistency}{{\scshape Inference}}
+Double braced title, nested.
+\end{frame}
+
+\begin{frame}<2>{Overlay {Planning} Title}
+Overlay frame, nested title.
+\end{frame}
+\end{document}
