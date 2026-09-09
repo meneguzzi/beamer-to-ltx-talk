@@ -1,0 +1,21 @@
+% Converted, ltx-talk, built with lualatex -- which is the whole workaround.
+% There is no source change for C-PDFTEX-MATH: the fix is the build engine, so
+% an already-converted deck is repaired by rebuilding.
+%
+% Measured (ltx-talk 0.6.0, TeX Live 2026, three passes):
+%
+%   engine    pdftotext                             <math payloads
+%   lualatex  Inline: g(a, b, c) and x.y and p … q.  4
+%   pdflatex  Inline: g (a; b; c) and x:y and p : : : q.  0
+%
+% Under pdfTeX every comma becomes ';', every period ':', and \ldots ': : :'.
+% The slides look right either way, so only the text layer shows it.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+\begin{document}
+\begin{frame}
+\frametitle{Maths in the text layer}
+Inline: $g(a, b, c)$ and $x.y$ and $p \ldots q$.
+\[ f(x) = \sum_{i=1}^{n} a_i x^i \]
+\end{frame}
+\end{document}

@@ -1,0 +1,26 @@
+% The NAIVE conversion: class swapped, the bare [b] frame option left alone.
+% This is the defect C-FRAME-OPT is about. ltx-talk takes a key-value list, so a
+% list of nothing but bare words is discarded whole -- no error, no warning, right
+% page count, identical extracted text. The frame just renders centred.
+%
+% Measured (lualatex, pdftotext -bbox yMin of the word "paragraph" as a fraction
+% of page height; 0.0 is the top edge):
+%   before.tex  0.950  beamer [b]                    -- bottom
+%   after.tex   0.868  vertical-alignment=bottom     -- bottom
+%   naive.tex   0.475  bare [b], discarded           -- CENTRED
+%
+% The fractions differ between the first two because beamer 16:9 is 272.126pt tall
+% and ltx-talk 283.465pt; both are unambiguously bottom-aligned, and the naive one
+% is unambiguously not.
+%
+% If assert-naive.sh ever fails, ltx-talk has started parsing option lists without
+% an "=", or errors on an unknown bare word. Either is the entry's revisit-when.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+
+\begin{document}
+\begin{frame}[b]
+\frametitle{Pinned to the bottom}
+This paragraph sits at the foot of the slide, under the empty space.
+\end{frame}
+\end{document}

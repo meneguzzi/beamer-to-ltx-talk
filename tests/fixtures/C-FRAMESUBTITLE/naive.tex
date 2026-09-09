@@ -1,0 +1,22 @@
+% The NAIVE conversion: class swapped, \frametitle/\framesubtitle left as they
+% were. This is what a careful-looking conversion produces if nobody knows about
+% C-FRAMESUBTITLE, and it is the deck this fixture exists to rule out.
+%
+% It compiles, exit 0, one page, Tagged: yes, and the word "Quiz" is absent from
+% the PDF. assert-naive.sh asserts that absence, so the assertions on before.tex
+% and after.tex are not vacuous: they check a property that demonstrably CAN be
+% lost.
+%
+% If assert-naive.sh ever fails, ltx-talk has started typesetting the subtitle.
+% That is the "revisit when" of the catalogue entry, and the runner reports it as
+% advisory rather than failing the build.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+
+\begin{document}
+\begin{frame}[vertical-alignment=center]
+\frametitle{Constraint Satisfaction}
+\framesubtitle{Quiz}
+Body text.
+\end{frame}
+\end{document}

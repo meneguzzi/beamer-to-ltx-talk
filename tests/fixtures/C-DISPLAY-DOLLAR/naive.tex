@@ -1,0 +1,26 @@
+% The NAIVE conversion: class swapped, $$...$$ left in place. Compiles, exit 0,
+% one page, Tagged: yes, and pdftotext returns the same words in the same order,
+% so nothing but geometry reveals the defect.
+%
+% Measured (ltx-talk 0.6.0, lualatex), xMin of the first word of each item:
+%   after.tex  50.165  50.165  50.165   -- indent intact
+%   naive.tex  50.165  28.346  28.346   -- items 2 and 3 lose 21.82pt
+% 21.82pt is the itemize indent, so they land on the frame margin. That matches
+% the 21.7pt in the catalogue entry, measured on a different rig.
+%
+% assert-naive.sh asserts the difference, which is what keeps the assertions on
+% before.tex and after.tex from being vacuous.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+
+\begin{document}
+\begin{frame}
+\frametitle{Utilities}
+\begin{itemize}
+\item A utility function maps states to reals
+$$U:S \to R$$
+\item The agent maximises expected utility
+\item Preferences must be transitive
+\end{itemize}
+\end{frame}
+\end{document}
