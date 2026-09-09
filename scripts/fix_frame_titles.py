@@ -29,7 +29,9 @@ import argparse
 import re
 import sys
 
-HEAD_RE = re.compile(r'^(\s*)\\begin\{frame\}(\[[^\]]*\])?\{')
+# Optional <overlayspec> before the [opts] bracket, as in convert_deck.py: Beamer allows
+# \begin{frame}<2>[c]{Title}, and a header that is not matched here is skipped SILENTLY.
+HEAD_RE = re.compile(r'^(\s*)\\begin\{frame\}(<[^>]*>)?(\[[^\]]*\])?\{')
 
 
 def match_group(s: str, i: int):
@@ -61,7 +63,8 @@ def fix(path: str, dry: bool) -> int:
         if not m:
             out.append(line)
             continue
-        indent, opt = m.group(1), m.group(2) or ''
+        indent = m.group(1)
+        head = (m.group(2) or '') + (m.group(3) or '')   # <overlay>[opts], either may be absent
         first = match_group(line, m.end() - 1)
         if not first:
             out.append(line)
@@ -75,7 +78,7 @@ def fix(path: str, dry: bool) -> int:
         if line[end:].strip():        # trailing junk -> leave it for a human
             out.append(line)
             continue
-        out.append(f'{indent}\\begin{{frame}}{opt}')
+        out.append(f'{indent}\\begin{{frame}}{head}')
         out.append(f'{indent}\\frametitle{{{title}}}')
         n += 1
     if n and not dry:

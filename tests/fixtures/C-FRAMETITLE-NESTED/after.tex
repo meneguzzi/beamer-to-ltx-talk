@@ -1,5 +1,5 @@
 % Converted, ltx-talk. The frame headers are exactly what
-% scripts/fix_frame_titles.py emits from before.tex (verified by running it: "2
+% scripts/fix_frame_titles.py emits from before.tex (verified by running it: "3
 % frame title(s) fixed") -- a real brace matcher, run AFTER convert_deck.py,
 % which is the documented workaround for C-FRAMETITLE-NESTED. The double form is
 % joined with " --- ".
@@ -22,5 +22,10 @@ Single braced title, nested.
 \begin{frame}[vertical-alignment=center]
 \frametitle{Arc consistency --- {\scshape Inference}}
 Double braced title, nested.
+\end{frame}
+
+\begin{frame}<2>
+\frametitle{Overlay {Planning} Title}
+Overlay frame, nested title.
 \end{frame}
 \end{document}

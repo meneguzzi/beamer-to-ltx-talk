@@ -13,4 +13,10 @@ Single braced title, nested.
 \begin{frame}[c]{Arc consistency}{{\sc Inference}}
 Double braced title, nested.
 \end{frame}
+
+% Overlay spec ahead of the title. fix_frame_titles.py used to skip this header
+% too, silently (#32), so the fold has to be checked behind a <spec> as well.
+\begin{frame}<2>{Overlay {Planning} Title}
+Overlay frame, nested title.
+\end{frame}
 \end{document}

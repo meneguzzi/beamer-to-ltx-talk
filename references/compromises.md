@@ -122,7 +122,7 @@ records what would let it move up, or disappear.
   `convert_deck.py`. It handles both the single and double forms.
 - **Always verify afterwards** — this must return nothing:
   ```sh
-  grep -nE '^\s*\\begin\{frame\}(\[[^]]*\])?\{' deck.tex
+  grep -nE '^\s*\\begin\{frame\}(<[^>]*>)?(\[[^]]*\])?\{' deck.tex
   ```
 - **Revisit when:** `convert_deck.py` grows a brace matcher of its own.
 
