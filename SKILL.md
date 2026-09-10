@@ -357,14 +357,15 @@ Iterate until `latexmk` exits 0.
 
 ## Step 4 — Verify (don't trust "it compiled")
 
-For each converted deck confirm **all six** — the third, fourth and fifth have no error message
-and are the ones people miss:
+For each converted deck confirm **all seven** — the third, fourth, fifth and sixth have no
+error message and are the ones people miss:
 ```sh
 pdfinfo deck.pdf | grep -E 'Pages|Tagged'                  # Tagged: yes, pages == baseline
 grep -c 'tagpdf Error' deck.log                            # must be 0 (Warnings are OK)
 grep -nE '^\s*\\begin\{frame\}(<[^>]*>)?(\[[^]]*\])?\{' deck.tex     # must be EMPTY: title-less frames
 pdftotext deck.pdf - | grep -n '[a-z]; [a-z]'              # must be EMPTY: pdfTeX maths corruption
 grep -ciE 'Rerun to get|Label\(s\) may have changed' deck.log       # must be 0: build converged
+grep -c 'Missing character' deck.log                       # must be 0: glyph dropped from the slide
 grep -c 'Alternative text for graphic is missing' deck.log # -> 0 after Step 6
 pdftoppm -png -r 70 -f 1 -l 4 deck.pdf /tmp/new            # eyeball title/heading/columns
 ```
@@ -380,6 +381,10 @@ pdftoppm -png -r 70 -f 1 -l 4 deck.pdf /tmp/new            # eyeball title/headi
   `latexmk` stopped early — almost always because a non-halting `!` error made it give up after
   one pass, leaving cross-references as `??` and `remember picture` anchors unresolved
   (**C-ONEPASS**). Page count and `Tagged: yes` both pass while this is true.
+- **No dropped glyphs.** A hit on `Missing character` means a character in the deck is outside
+  ltx-talk's default font coverage, and it is **absent from the slide** — nothing else reports
+  this, and the text layer shows U+FFFD where it was (**C-GLYPH-MISSING**). `\checkmark` is the
+  usual instance. Fix by substituting a character the font has, e.g. `pifont`'s `\ding{51}`.
 - Spot-check the title page, a section divider, a columns/figure frame, and an algorithm
   frame against the reference renders.
 
@@ -480,6 +485,18 @@ A-HEADINGS and A-MATHALT are settled in the preamble and solve the whole course 
 > The `-f ua2` and the `ua-2` in `\DocumentMetadata` must agree: validating as ua2 a file that
 > never declared ua-2 fails on clause 5 before anything else (**C-NO-UA2**). Run it before
 > calling any A-\* fix done.
+
+**Two font-level failures show up only here**, and neither is in the table above because
+neither came from a checker run on a course — they were isolated on eight-line MWEs. Both pass
+every Step 4 gate:
+
+| veraPDF clause | Cause | Entry |
+|---|---|---|
+| `8.4.5.9-1` — a reference to `.notdef` | a character outside ltx-talk's default font coverage; also caught free by `grep 'Missing character'` in Step 4 | **C-GLYPH-MISSING** |
+| `8.4.5.8-1` — no Unicode map for a used code | `wasysym`/`bbding`/`marvosym` pull a Type 1 font whose embedded `/ToUnicode` omits the code being shown; the text layer returns a wrong character | **C-SYMBOL-FONT-TOUNICODE** |
+
+⚠ `pdffonts` does **not** detect the second one: its `uni` column reports a map exists, not that
+it covers the glyphs used, and it reads `yes` for three fonts that fail.
 
 Three points of judgement the scripts cannot make for you:
 

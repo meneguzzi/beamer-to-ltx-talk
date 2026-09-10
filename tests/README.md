@@ -148,6 +148,8 @@ in the head comment. Measured for the current set:
 | `C-TITLEPAGE` | **did not reproduce on 0.5.3** — see the fixture's head comment | n/a |
 | `C-BACKGROUND` | stubbed out, the background page is 99% white under white text; unscoped, it leaks onto page 3 | no — visual; sample the page, or count `/S /Figure` |
 | `C-PDFTEX-MATH` | maths punctuation corrupt in the text layer, no MathML | **yes** — `assert-*.sh`, three engines, 4 vs 0 MathML payloads |
+| `C-GLYPH-MISSING` | the character is absent from the slide | **yes** — `assert-*.sh`, `Missing character` in the log, U+FFFD in the text layer |
+| `C-SYMBOL-FONT-TOUNICODE` | text layer returns `2` where `□` was rendered | **yes** — `assert-*.sh`, `pdftotext`; no `before.tex`, the Beamer original has the same defect |
 
 ⚠ **`pdftotext` cannot verify overlays.** ltx-talk typesets every overlay branch once and
 toggles visibility with PDF OCG layers, so hidden content is still present in the extracted

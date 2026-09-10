@@ -1,0 +1,18 @@
+% The conversion with wasysym left in place. It renders correctly, compiles clean, is
+% tagged, and has NO Missing character in the log -- so C-GLYPH-MISSING's cheap log grep
+% does not see this one. What is wrong is the text layer: $\Box$ comes back as the digit 2.
+%
+% Mechanism: wasysym pulls the Type 1 font wasy10 with a Builtin encoding. LuaTeX does emit
+% a /ToUnicode CMap for it, but an incomplete one -- veraPDF names the used glyph as code 50
+% (0x32) and the CMap maps 14 codes, not including 0x32. With no mapping an extractor falls
+% back to the raw byte, and 0x32 is ASCII "2". Fails PDF/UA-2 clause 8.4.5.8-1.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+\usepackage{wasysym}
+
+\begin{document}
+\begin{frame}
+\frametitle{Symbol source}
+Shape A $\Box$ B done.
+\end{frame}
+\end{document}

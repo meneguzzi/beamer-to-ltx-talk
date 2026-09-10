@@ -1,0 +1,20 @@
+% Converted, ltx-talk, C-SYMBOL-FONT-TOUNICODE workaround applied: amssymb instead of
+% wasysym. $\Box$ then extracts as U+25A1 and the file passes verapdf -f ua2.
+%
+% NOTE THERE IS NO before.tex HERE, deliberately. The usual pattern is that the Beamer
+% original holds the property and the naive conversion loses it. That is not this defect:
+% the same wasysym $\Box$ under Beamer + pdfTeX ALSO extracts as "2" (measured). The
+% corruption is inherited from the deck, not caused by the conversion. What conversion
+% changes is the consequence -- the converted deck declares pdfstandard={a-4,ua-2} and so
+% now fails clause 8.4.5.8-1 on something it was always doing. There is no "before"
+% property to preserve, so asserting one would be a fiction.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+\usepackage{amssymb}
+
+\begin{document}
+\begin{frame}
+\frametitle{Symbol source}
+Shape A $\Box$ B done.
+\end{frame}
+\end{document}
