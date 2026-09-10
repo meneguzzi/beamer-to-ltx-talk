@@ -16,7 +16,8 @@ tests/fixtures/<ID>/
   assert-before.sh  # OPTIONAL: the property this conversion must preserve
   assert-after.sh   # OPTIONAL: the same property, still there
   assert-naive.sh   # OPTIONAL: the defect is present
-  fixture.conf      # OPTIONAL: engine and pass-count overrides
+  assert-<variant>-<output>.sh   # OPTIONAL: the claim for an extra output
+  fixture.conf      # OPTIONAL: engine, pass-count and extra-output overrides
 ```
 
 Alongside the LaTeX fixtures there is a source-level corpus, which no build touches:
@@ -179,7 +180,8 @@ reported as `VACUOUS ASSERTION` — a hard failure. This is the harness checking
 its own original sin: an assertion of "compiles and `Tagged: yes`" passes every naive.tex in
 this directory, and would be caught here.
 
-`fixture.conf` overrides the build, `ENGINES` (default `lualatex`) and `PASSES` (default 1):
+`fixture.conf` overrides the build — `ENGINES` (default `lualatex`), `PASSES` (default 1) and
+`EXTRA_OUTPUTS` (default none):
 
 ```sh
 ENGINES="lualatex pdflatex"   # build and assert under each
@@ -187,6 +189,8 @@ ENGINES_before="pdflatex"     # or per variant
 ENGINES_after="lualatex"
 ENGINES_naive="pdflatex"
 PASSES=3
+EXTRA_OUTPUTS="handout"           # build each variant again with class options
+CLASS_OPTIONS_handout="handout"   # ...these ones
 ```
 
 The default engine is `lualatex` because that is what SKILL.md Step 3 requires; running the
@@ -195,6 +199,21 @@ Per-variant engines exist because for some entries **the defect is the engine, n
 — `C-PDFTEX-MATH` is one deck built three ways. `PASSES` exists because some properties only
 appear once the build converges: MathML payloads are absent on pass 1 under every engine, so a
 single-pass harness would "prove" LuaLaTeX no better than pdfTeX.
+
+`EXTRA_OUTPUTS` exists because for one entry the defect is invisible in the only output the
+suite used to build. `C-HANDOUT-MODE` is that entry: the **slides** build of the fixed and the
+broken deck are the same 2 pages with the same text layer, and they differ only in the
+**handout** build, where the broken one stacks every overlay of a frame onto one page. Each
+extra output is built with `\PassOptionsToClass{<opts>}{<class>}` ahead of the file, taking
+`<class>` from the source's own `\documentclass` — so one key covers a beamer `before.tex` and
+an ltx-talk `after.tex` without the fixture naming either. Measured: that injection is
+equivalent to writing the option into `\documentclass[...]`, under both classes.
+
+An extra output asserts through its own `assert-<variant>-<output>.sh`, with the same
+per-variant meaning and the same mutation check as the default output. `C-HANDOUT-MODE` has
+**no** `assert-after.sh` for the default output on purpose: any assertion true of the fixed
+slides build is equally true of the broken one, so the mutation check would report it as
+vacuous — correctly. That the slides build cannot tell them apart is the entry.
 
 ## What the suite can and cannot assert
 
@@ -209,7 +228,7 @@ in the head comment. Measured for the current set:
 | `C-ALERTBLOCK` | literal `[` renders as the box title | **yes** — `assert-*.sh`, text layer: `[` and `Key result]` |
 | `C-ONSLIDE-ARG` | overlay 1 renders **blank**; page count correct | **yes** — `assert-*.sh`, pixel probe, prose band 0.0387 vs 0.0000 |
 | `C-FRAMESUBTITLE` | subtitle text absent from the PDF | **yes** — `assert-*.sh`, `pdftotext` grep |
-| `C-HANDOUT-MODE` | handout stacks all overlays on one page | no — handout build only |
+| `C-HANDOUT-MODE` | handout stacks all overlays on one page | **yes** — `assert-*-handout.sh`, via `EXTRA_OUTPUTS`; the slides build cannot see it |
 | `C-DISPLAY-DOLLAR` | items after the display outdent to the frame margin | **yes** — `assert-*.sh`, `xMin` 50.165 vs 28.346 |
 | `C-FRAME-OPT` | `[b]` frame renders centred instead of bottom-aligned | no — needs `pdftotext -bbox` (`yMin` 135.76 vs 247.96) |
 | `C-FRAMETITLE` | title renders as body text, header bar empty | **yes** — `assert-*.sh`, `yMin` 0.475 vs 0.023 of page height |
