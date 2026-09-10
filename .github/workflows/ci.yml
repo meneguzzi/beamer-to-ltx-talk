@@ -55,6 +55,13 @@ jobs:
       - name: Converter is idempotent (tests/run_converter_idempotence.sh)
         run: bash tests/run_converter_idempotence.sh
 
+      # The pixel probe's parser arm needs no LaTeX and no poppler, so it runs
+      # here as well as in the TeX Live job: a wrong measurement is then a
+      # 20-second failure rather than a four-minute one. The rendered arm skips
+      # itself when lualatex and pdftoppm are absent, and runs in latex-fixtures.
+      - name: Pixel probe self-test, parser arm (tests/run_pixel_probe_selftest.sh)
+        run: bash tests/run_pixel_probe_selftest.sh
+
       - name: Lint C-HANDOUT-MODE (fires on before.tex, silent on after.tex)
         run: |
           set -e
@@ -133,6 +140,14 @@ jobs:
           "$installer" /tmp/auto-install.xml
           ln -sf /opt/verapdf/verapdf /usr/local/bin/verapdf
           verapdf --version || (echo "::error::verapdf installed but not runnable - the fixture UA-2 assertions would silently skip"; exit 1)
+
+      # Runs before the fixtures, deliberately: the fixtures that measure pixels
+      # are only as good as the probe, and #18 was a suite of assertions that
+      # could not fail. Every positive check in the self-test is paired with the
+      # inverted claim, which must be rejected. ~4s, of which ~3 is one lualatex
+      # run; pdftoppm comes from the poppler-utils installed above.
+      - name: Pixel probe self-test (tests/run_pixel_probe_selftest.sh)
+        run: bash tests/run_pixel_probe_selftest.sh
 
       - name: Build and assert MWE fixtures (tests/fixtures/*/)
         run: bash tests/run_fixtures.sh

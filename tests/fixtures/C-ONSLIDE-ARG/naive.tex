@@ -1,0 +1,33 @@
+% Converted, ltx-talk, C-ONSLIDE-ARG workaround NOT applied -- the defect.
+%
+% This is the conversion that looks right: \onslide<2>{...} is correct Beamer, so it survives a
+% mechanical conversion untouched and nothing complains. Under ltx-talk \onslide is declared
+% { D <> { all } } with no +m, so this parses as the DECLARATION \onslide<2> followed by a
+% stray brace group -- and the declaration blanks everything to the end of the frame.
+%
+% Measured on ltx-talk 0.6.2 / TeX Live 2026, lualatex, two passes, against after.tex, whose
+% only difference is \uncover in place of \onslide. Non-white fraction of the prose band
+% (0.05,0.35)-(0.75,0.62) at 70dpi:
+%
+%                       pages  Tagged  overlay 1  overlay 2  text layer
+%   after.tex (\uncover)    2     yes     0.0387     0.0595   identical
+%   this file  (\onslide)   2     yes     0.0000     0.0595   identical
+%
+% Overlay 1 is EMPTY -- including the prose that has nothing to do with the overlay and must be
+% visible on every page. Overlay 2 is pixel-for-pixel what the fixed version produces, so a
+% reader flicking to the last page of the frame sees nothing wrong.
+%
+% The text layers are byte-identical, checked with diff: ltx-talk typesets every overlay branch
+% once and toggles visibility with OCG layers, so pdftotext returns the hidden text too. That is
+% why this fixture measures pixels. One 11-deck course had 139 of these sites; a 20-deck course
+% another 204.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+
+\begin{document}
+\begin{frame}
+\onslide<2>{Revealed on the second overlay.}
+
+Prose that must stay visible on every overlay, including the first.
+\end{frame}
+\end{document}

@@ -273,3 +273,75 @@ must_not_fail_ua2() {
     *) note "veraPDF ua2 does not fail $want (other clauses: ${got:-none})" ;;
   esac
 }
+
+# --- Rendered pixels (pdftoppm) ----------------------------------------------
+#
+# The text layer, the log and the structure tree can all be correct while the
+# page renders wrong. C-BACKGROUND is the case that forced this: stub out
+# \usebackgroundtemplate and the frame compiles, is tagged, has the right page
+# count and extracts the right words -- as white text on a white page. These
+# helpers render the page with pdftoppm and measure it.
+#
+# pdftoppm is not a new dependency and needs no new CI install step: it is part
+# of poppler-utils, which the suite already requires for pdfinfo and pdftotext,
+# and SKILL.md Step 4 already tells a human to eyeball a page with it. There are
+# deliberately NO stored reference images -- a committed PNG rots on the first
+# ltx-talk font or spacing change and tells nobody why. Every claim here is a
+# measurement with a stated tolerance instead.
+#
+# Regions are FRACTIONS of page width/height, y from the TOP, as in
+# pdftotext -bbox and hence must_ymin_frac_between.
+#
+# Resolution is deliberately low (PIXEL_DPI, default 70, as in SKILL.md Step 4).
+# These assertions measure whether a region is painted at all, not typography,
+# and pixelprobe.py sums in pure Python: a full page at 70dpi is ~0.5M pixels
+# and about a second, at 300dpi it is twenty times that.
+
+PIXEL_DPI="${PIXEL_DPI:-70}"
+
+# render_page N -- path to page N as a PPM, rendered once per (page, dpi).
+render_page() {
+  local page="$1" out=".probe-p$1-$PIXEL_DPI"
+  if [ ! -s "$out.ppm" ]; then
+    pdftoppm -f "$page" -l "$page" -r "$PIXEL_DPI" -singlefile "$PDF" "$out" \
+      2>/dev/null || fail "pdftoppm failed to render page $page of $PDF"
+    [ -s "$out.ppm" ] || fail "pdftoppm produced no raster for page $page of $PDF (does it exist?)"
+  fi
+  echo "$out.ppm"
+}
+
+_probe() {
+  local ppm; ppm=$(render_page "$1"); shift
+  python3 "$(dirname "$ASSERT_LIB")/pixelprobe.py" "$ppm" "$@" \
+    || fail "pixelprobe.py $* failed on $ppm"
+}
+
+# pixel_at PAGE X Y -- "R G B" at that point.
+pixel_at() { _probe "$1" pixel "$2" "$3"; }
+
+# region_mean PAGE X0 Y0 X1 Y1 -- "R G B" mean over the region.
+region_mean() { _probe "$1" mean "$2" "$3" "$4" "$5"; }
+
+# frac_nonwhite PAGE X0 Y0 X1 Y1 -- fraction of the region's pixels that are
+# not near-white, 0.0000 to 1.0000.
+frac_nonwhite() { _probe "$1" nonwhite "$2" "$3" "$4" "$5"; }
+
+# must_frac_nonwhite_between PAGE X0 Y0 X1 Y1 LO HI -- the primitive. Both
+# bounds are inclusive; the measured value is always reported.
+must_frac_nonwhite_between() {
+  local page="$1" got lo="$6" hi="$7"
+  got=$(frac_nonwhite "$1" "$2" "$3" "$4" "$5")
+  python3 -c "import sys; sys.exit(0 if $lo <= $got <= $hi else 1)" \
+    || fail "page $page region ($2,$3)-($4,$5) is $got non-white, expected $lo..$hi"
+  note "page $page region ($2,$3)-($4,$5): $got non-white (wanted $lo..$hi)"
+}
+
+# must_be_blank PAGE X0 Y0 X1 Y1 -- nothing is drawn there. The 2% allowance is
+# for antialiased ink bleeding in from just outside the region, not for content.
+must_be_blank() { must_frac_nonwhite_between "$1" "$2" "$3" "$4" "$5" 0.00 0.02; }
+
+# must_be_painted PAGE X0 Y0 X1 Y1 -- the region is essentially all ink, which
+# is what a full-bleed background or a filled block looks like. NOT for text:
+# a region of prose is mostly white paper, so measure that with
+# must_frac_nonwhite_between and a band you have actually observed.
+must_be_painted() { must_frac_nonwhite_between "$1" "$2" "$3" "$4" "$5" 0.90 1.00; }
