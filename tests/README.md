@@ -173,7 +173,7 @@ in the head comment. Measured for the current set:
 | `C-FRAME-OPT` | `[b]` frame renders centred instead of bottom-aligned | no — needs `pdftotext -bbox` (`yMin` 135.76 vs 247.96) |
 | `C-FRAMETITLE` | title renders as body text, header bar empty | no — visual |
 | `C-FRAMETITLE-NESTED` | nested-brace title renders as body text, also behind an overlay spec | yes |
-| `C-TITLEPAGE` | **did not reproduce on 0.5.3** — see the fixture's head comment | n/a |
+| `C-TITLEPAGE` | **retired** — the overlap does not reproduce on 0.5.3 or 0.6.2, four variants measured | n/a — deliberately no `naive.tex`, see the fixture's head comment |
 | `C-BACKGROUND` | stubbed out, the background page is 99% white under white text; unscoped, it leaks onto page 3 | no — visual; sample the page, or count `/S /Figure` |
 | `C-PDFTEX-MATH` | maths punctuation corrupt in the text layer, no MathML | **yes** — `assert-*.sh`, three engines, 4 vs 0 MathML payloads |
 | `C-GLYPH-MISSING` | the character is absent from the slide | **yes** — `assert-*.sh`, `Missing character` in the log, U+FFFD in the text layer, veraPDF `8.4.5.9-1` |
