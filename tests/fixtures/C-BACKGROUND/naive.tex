@@ -1,0 +1,47 @@
+% Converted, ltx-talk, C-BACKGROUND workaround NOT applied -- the defect.
+%
+% ltx-talk has no \usebackgroundtemplate, so the deck stops with "! Undefined control
+% sequence". This is the tempting repair: define the command to do nothing, and the error
+% goes away. Everything a build normally reports then says the deck is fine.
+%
+% Measured on ltx-talk 0.6.2 / TeX Live 2026, lualatex, two passes, against after.tex --
+% the ONLY difference is the shim block below:
+%
+%                        pages  Tagged  page-1 ink  page-2 ink  page-3 ink
+%   after.tex (workaround)   3     yes      1.0000      1.0000      0.0095
+%   this file  (stubbed)     3     yes      0.0025      0.0026      0.0095
+%
+% Same page count, same tagging, and the text layer still carries every word of the slide.
+% The frame is white text on a white page: nothing but the pixels sees it, which is why the
+% pixel probe exists (#43).
+%
+% "ink" is the fraction of non-white pixels over the whole page at 70dpi (frac_nonwhite).
+% 0.0025 is the white text's antialiasing against white paper; it is not content.
+%
+% NB the text layer does differ, by "16×9" and "(Original size: 320×180 bp)" -- but only
+% because TeX Live's example-image-16x9 has words printed in it. A photograph would leave the
+% two text layers byte-identical, so there is deliberately no assertion on that string.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+\usepackage{graphicx}
+
+%% --- the stub. after.tex has the shim from assets/preamble-template.tex here.
+\newcommand{\usebackgroundtemplate}[1]{}
+%% --- end stub
+
+\begin{document}
+{
+\usebackgroundtemplate{\includegraphics[width=\paperwidth]{example-image-16x9}}%
+\begin{frame}[vertical-alignment=bottom]
+\frametitle{Warning}
+\begin{itemize}
+  \item \color{white} White text over the image
+  \item<2-> \color{white} Second overlay, still white
+\end{itemize}
+\end{frame}
+}
+\begin{frame}
+\frametitle{After the group}
+The background must not leak onto this page.
+\end{frame}
+\end{document}

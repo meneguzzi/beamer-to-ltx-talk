@@ -749,6 +749,9 @@ records what would let it move up, or disappear.
   `--lint`-only stance (see the note under Step 2 in `SKILL.md` — this rewrite is deliberately
   left manual, not automated, precisely because it needs this kind of judgement) should
   first check the group doesn't contain a `\begin{tabular}`/`\begin{align*}`/etc.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-ONSLIDE-ARG/`,
+  pixel probe: overlay 1's prose band is 0.0000 non-white against 0.0387 with `\uncover`, both
+  2 pages and both text layers byte-identical)
 - **Revisit when:** ltx-talk gives `\onslide` a `+m` argument form for Beamer compatibility.
   Track against `\NewDocumentCommand \onslide` in `ltx-talk.cls`.
 
@@ -1145,6 +1148,8 @@ records what would let it move up, or disappear.
   `\begin{alertblock}<2->{Title}` genuinely needs the overlay, don't reinvent the environment
   signature to swallow `<...>` — wrap the whole box instead:
   `\onslide<2->{\begin{alertblock}{Title}...\end{alertblock}}`.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-ALERTBLOCK/`,
+  text layer: the naive wrapper extracts as `[` and `Key result]`, one page, `Tagged: yes`)
 - **Revisit when:** ltx-talk grows native `alertblock`/`exampleblock` (tracked alongside the
   same issues as C-IMMATURE's block/theorem status).
 
@@ -1237,6 +1242,10 @@ records what would let it move up, or disappear.
 - **Detect before compiling:** `convert_deck.py --lint` reports `C-BACKGROUND` on any
   `\usebackgroundtemplate`, to say the shim must be in the common preamble. It does not
   rewrite the deck, because with the shim there is nothing to rewrite.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-BACKGROUND/`,
+  pixel probe: page-1 ink 0.0025 stubbed against 1.0000 with the shim, both 3 pages and both
+  `Tagged: yes`; the `artifact` claim re-measured on 0.6.2 at 2 `/S /Figure` without it, 0 with;
+  the themed-rig percentages above were taken on 0.6.0 and not repeated)
 - **Revisit when:** ltx-talk gains a background-image interface of its own; the shim block is
   then deleted and nothing else changes.
 
