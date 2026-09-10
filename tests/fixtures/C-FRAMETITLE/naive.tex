@@ -1,0 +1,21 @@
+% The conversion WITHOUT the C-FRAMETITLE workaround: class swapped, [c] mapped to
+% vertical-alignment=center (that is C-FRAME-OPT's job and convert_deck.py does it), but the
+% braced title left in place. Compiles clean, right page count, Tagged: yes -- and the title
+% text is BODY TEXT. Measured: "Objectives" sits at 0.475 of page height, the same line as
+% "Body text.", while a real \frametitle puts it at 0.023. The header bar is empty.
+%
+% The second frame is the leading-<overlayspec> form. It behaves identically; it is here
+% because that shape fell through every regex until it was found on a real course, so the
+% fixture keeps a case of it.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+
+\begin{document}
+\begin{frame}[vertical-alignment=center]{Objectives}
+Body text.
+\end{frame}
+
+\begin{frame}<1>[vertical-alignment=center]{Overlay spec ahead of the options bracket}
+Body text.
+\end{frame}
+\end{document}

@@ -37,8 +37,14 @@ for d in tests/fixtures/*/; do
 done
 ```
 
-As of 2026-09-10 that is 7 self-verifying and 7 compile-only, out of 14 fixtures, against
-roughly 40 entries in this file. An entry with no fixture at all has nothing checking it.
+As of 2026-09-10 that is 8 self-verifying and 6 compile-only, out of 14 fixtures, against 43
+entries in this file. An entry with no fixture at all has nothing checking it — **#40** tracks
+the 29 in that state.
+
+One fixture is compile-only **on purpose**: `C-TITLEPAGE` is retired, and a `naive.tex`
+asserting a defect that no longer exists would report `ADVISORY` on every run for ever. The
+cost is that a retired entry has no self-maintaining check, so nothing notices if its defect
+comes back.
 
 `Verified:` lines have a fixed shape so they can be read by a script as well as by a person —
 `#12` (upgrade an already-converted deck) needs exactly this:
@@ -144,6 +150,9 @@ records what would let it move up, or disappear.
   "no orphan titles" while the frame was still unconverted. Both regexes now accept an
   optional `(<[^>]*>)?` ahead of the options group. Only 2 instances found in one course,
   but they cost nothing to miss silently — always spot-check.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-FRAMETITLE/`;
+  the braced title lands at 0.475 of page height, the same line as the body text, against
+  0.023 for a real `\frametitle`)
 - **Revisit when:** n/a — `\frametitle` is the documented primary form; keep using it.
 
 ## C-FRAMETITLE-NESTED — the convert script silently skips nested-brace titles  ⚠ silent
