@@ -1,10 +1,51 @@
 # Beamer → ltx-talk: compromises & incompatibilities
 
-Catalogue of problems found converting two real courses (11 decks, then 20) to **ltx-talk,
-verified across 0.5.0–0.5.2** (0.5.0 released 2026-04-30; dev branch needs LaTeX kernel
-2026-06-01). Each entry notes the specific version it was verified against. Each entry: **symptom → cause →
-workaround → revisit when**. Most only appear under tagging (`\DocumentMetadata`), which is
-why they are absent from the upstream quick-start docs.
+Catalogue of problems found converting two real courses (11 decks, then 20) to **ltx-talk**.
+Built against 0.5.0–0.5.2 (0.5.0 released 2026-04-30; dev branch needs LaTeX kernel 2026-06-01).
+Each entry: **symptom → cause → workaround → revisit when**. Most only appear under tagging
+(`\DocumentMetadata`), which is why they are absent from the upstream quick-start docs.
+
+## Version pins, and what a stale one means
+
+The installed class reports its own version and date, and that — not CTAN's catalogue label —
+is what a pin should record:
+
+```sh
+grep -m1 ProvidesExplClass "$(kpsewhich ltx-talk.cls)"
+#  \ProvidesExplClass {ltx-talk} {2026-09-07} {0.6.2}
+tlmgr info ltx-talk | grep -E 'cat-version|revision'     # cat-version: 0.6.1 -- lags
+```
+
+An entry that carries a **`Verified:`** line has had its symptom re-checked on the version named
+there. An entry without one has **not been re-checked** — which is not the same as "checked and
+found still broken". Do not read an old pin as evidence either way.
+
+Re-verification is a suite run, not a reading exercise. `tests/run_fixtures.sh` builds each
+fixture's `naive.tex`, the variant that carries the defect, and asserts the symptom is present:
+
+- the fixture reports **`OK`** → the symptom still reproduces on the installed ltx-talk;
+- the fixture reports **`ADVISORY`** → the defect is gone, and the entry is a **retirement
+  candidate**. The runner prints exactly that, and does not fail the build for it.
+
+So an entry gets a trustworthy pin by acquiring a `naive.tex`, after which the pin maintains
+itself. Which entries those are is **derivable from the repo**, not maintained by hand here:
+
+```sh
+for d in tests/fixtures/*/; do
+  [ -f "$d/assert-naive.sh" ] && echo "self-verifying  $(basename "$d")" \
+                              || echo "compiles only   $(basename "$d")"
+done
+```
+
+As of 2026-09-10 that is 7 self-verifying and 7 compile-only, out of 14 fixtures, against
+roughly 40 entries in this file. An entry with no fixture at all has nothing checking it.
+
+`Verified:` lines have a fixed shape so they can be read by a script as well as by a person —
+`#12` (upgrade an already-converted deck) needs exactly this:
+
+```text
+- **Verified:** YYYY-MM-DD, ltx-talk X.Y.Z — <still reproduces|no longer reproduces> (<how>)
+```
 
 **Where a workaround lives matters as much as what it is.** ltx-talk is experimental and
 moving, so every entry here is temporary by design. A workaround that sits in the shared
@@ -124,6 +165,7 @@ records what would let it move up, or disappear.
   ```sh
   grep -nE '^\s*\\begin\{frame\}(<[^>]*>)?(\[[^]]*\])?\{' deck.tex
   ```
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-FRAMETITLE-NESTED/`, geometric assertion)
 - **Revisit when:** `convert_deck.py` grows a brace matcher of its own.
 
 ## C-FRAME-OPT — bare Beamer frame options are discarded  ⚠ silent; `[b]`/`[t]` render centred
@@ -208,6 +250,7 @@ records what would let it move up, or disappear.
   `t` (1 and 43), `b` (0 and 1) and `containsverbatim` (13 and 16).
 - **Detect before compiling:** `convert_deck.py --lint` reports `C-FRAME-OPT` for any option
   list holding a bare item. Hand-written frames keep reintroducing them.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-FRAME-OPT/`; measurements below taken on 0.6.0)
 - **Revisit when:** ltx-talk parses the list unconditionally, or errors on an unknown bare
   word. 0.6.1's *"Refine implementation of frame property storage"* (upstream #241) touches
   this machinery but does not change the behaviour — checked before it reached TeX Live here.
@@ -251,6 +294,7 @@ records what would let it move up, or disappear.
   ```
   The lint does not fire on the line defining a `\frametitlesub` dual-compile shim, whose
   Beamer-side body legitimately contains `\framesubtitle`.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-FRAMESUBTITLE/`; originally measured on 0.5.3)
 - **Revisit when:** a later release typesets the subtitle; `\frametitlesub` can then be retired.
 
 ## C-CENTER-ARG — `\center{…}` used as if it took an argument  ⚠ diagnosed nowhere near the fault
@@ -792,6 +836,7 @@ records what would let it move up, or disappear.
   pdftotext deck.pdf - | grep -n '[a-z]; [a-z]'
   ```
   `pdfinfo deck.pdf | grep Producer` says which engine actually built a given PDF.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-PDFTEX-MATH/`; measurements below taken on 0.6.0)
 - **Revisit when:** ltx-talk gives the pdfTeX path a maths font with correct ToUnicode maps, or
   drops the pdfTeX fallback. Verified present on 0.6.0.
 
@@ -835,6 +880,7 @@ records what would let it move up, or disappear.
 - ⚠ **`\checkmark` appears in C-PDFTEX-MATH for a different failure** — under pdfTeX it extracts
   as `X`. Same command, two unrelated mechanisms, and each can mask the other: rebuilding with
   LuaLaTeX fixes the extraction and *introduces* the dropped glyph.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-GLYPH-MISSING/`, log + text layer + veraPDF `8.4.5.9-1`)
 - **Revisit when:** ltx-talk gains a font fallback for characters outside the main font.
 
 ## C-SYMBOL-FONT-TOUNICODE — a legacy symbol package's ToUnicode map omits the glyph it uses  ⚠ silent; wrong character in the text layer
@@ -895,6 +941,7 @@ records what would let it move up, or disappear.
   defect is in the font's embedded map. Verified clean above: `amssymb` for maths symbols
   (`$\Box$` → `□`, `$\varnothing$` → `∅`), `pifont` for dingbats. This is a source change, so
   budget for it: a course preamble that loads `wasysym` globally exposes every deck.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-SYMBOL-FONT-TOUNICODE/`, text layer + veraPDF `8.4.5.8-1`)
 - **Revisit when:** LuaTeX emits complete `/ToUnicode` CMaps for builtin-encoded Type 1 fonts.
 
 ## C-DISPLAY-DOLLAR — `$$…$$` silently outdents every list item after it  ⚠ silent, ltx-talk only
@@ -937,6 +984,7 @@ records what would let it move up, or disappear.
 - **Limitation of any lexical pass:** `$a$$b$` — two adjacent inline maths with no space —
   reads as a `$$` to the converter, the lint and the grep. Rare; the converter reports its pair
   count so it can be eyeballed.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-DISPLAY-DOLLAR/`; measurements below taken on 0.5.3/0.6.0)
 - **Revisit when:** filed upstream. Best-evidenced item in the catalogue, with a clean MWE;
   issue #5 puts it first in the filing order. Not reported to ltx-talk as of 2026-08-27.
 
