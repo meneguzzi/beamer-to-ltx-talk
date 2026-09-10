@@ -90,6 +90,34 @@ and `LOG` in the environment. The library provides `must_contain` / `must_not_co
 `must_have_mathml` / `must_have_no_mathml`, and `log_count`. Each failure message names the
 value observed, so a CI log says what was measured rather than only that something failed.
 
+### PDF/UA-2 clauses (veraPDF)
+
+Two font-level entries have no cheap signal — `C-SYMBOL-FONT-TOUNICODE` compiles clean, is
+tagged, logs nothing, and only a real validator sees it. So `assert.sh` provides
+`must_fail_ua2` and `must_not_fail_ua2`, both taking a **clause id**:
+
+```sh
+must_fail_ua2 8.4.5.8-1        # the defect is visible to a validator
+must_not_fail_ua2 8.4.5.8-1    # the workaround clears that clause
+```
+
+**Always a named clause, never overall PASS/FAIL.** These fixtures are minimal decks with no
+`\title`, so every one of them fails `8.11.1-1` and `8.2.2-1` on its own account. "Passes ua2"
+would be false for all of them and "fails ua2" would be true for the wrong reason. A clause is
+the only claim that isolates the defect, and `must_not_fail_ua2` deliberately says nothing
+about any other clause.
+
+If `verapdf` is not on `PATH` the helpers print a note and pass, so a contributor without it
+still gets a green suite. CI does not rely on that: the workflow installs veraPDF and then runs
+`verapdf --version`, so a broken install fails the job instead of quietly disabling these
+assertions. Cost measured: 45-60s once per job for the JRE and installer, then ~0.9s per
+validation, of which the suite does four.
+
+⚠ veraPDF exits **1 for a non-compliant file**, which is the normal case here. Treating that as
+"could not run" is a real trap — an early version of `ua2_clauses` did, and returned no clauses
+at all, which made `must_not_fail_ua2` pass vacuously for every fixture. Only a missing or
+unparseable report means the run failed.
+
 **A failure means different things per variant, and that asymmetry is the point:**
 
 | variant | assertion says | on failure |
@@ -148,8 +176,8 @@ in the head comment. Measured for the current set:
 | `C-TITLEPAGE` | **did not reproduce on 0.5.3** — see the fixture's head comment | n/a |
 | `C-BACKGROUND` | stubbed out, the background page is 99% white under white text; unscoped, it leaks onto page 3 | no — visual; sample the page, or count `/S /Figure` |
 | `C-PDFTEX-MATH` | maths punctuation corrupt in the text layer, no MathML | **yes** — `assert-*.sh`, three engines, 4 vs 0 MathML payloads |
-| `C-GLYPH-MISSING` | the character is absent from the slide | **yes** — `assert-*.sh`, `Missing character` in the log, U+FFFD in the text layer |
-| `C-SYMBOL-FONT-TOUNICODE` | text layer returns `2` where `□` was rendered | **yes** — `assert-*.sh`, `pdftotext`; no `before.tex`, the Beamer original has the same defect |
+| `C-GLYPH-MISSING` | the character is absent from the slide | **yes** — `assert-*.sh`, `Missing character` in the log, U+FFFD in the text layer, veraPDF `8.4.5.9-1` |
+| `C-SYMBOL-FONT-TOUNICODE` | text layer returns `;` where `⇝` was rendered | **yes** — `assert-*.sh`, `pdftotext` plus veraPDF `8.4.5.8-1`; no `before.tex`, the Beamer original has the same defect |
 
 ⚠ **`pdftotext` cannot verify overlays.** ltx-talk typesets every overlay branch once and
 toggles visibility with PDF OCG layers, so hidden content is still present in the extracted

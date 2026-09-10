@@ -1,5 +1,9 @@
 % Converted, ltx-talk, C-SYMBOL-FONT-TOUNICODE workaround applied: amssymb instead of
-% wasysym. $\Box$ then extracts as U+25A1 and the file passes verapdf -f ua2.
+% wasysym. $\leadsto$ then extracts as U+21DD and the file passes verapdf -f ua2.
+%
+% \leadsto is the case to test, not some obviously-wasysym name: BOTH packages define it, so
+% a deck that loads both gets the wasy10 glyph with nothing in its source naming wasysym.
+% This is how the defect was found on a real course deck.
 %
 % NOTE THERE IS NO before.tex HERE, deliberately. The usual pattern is that the Beamer
 % original holds the property and the naive conversion loses it. That is not this defect:
@@ -15,6 +19,6 @@
 \begin{document}
 \begin{frame}
 \frametitle{Symbol source}
-Shape A $\Box$ B done.
+State A $\leadsto$ B done.
 \end{frame}
 \end{document}

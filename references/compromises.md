@@ -800,7 +800,8 @@ records what would let it move up, or disappear.
 - **Symptom: none.** The character is simply absent from the rendered slide. Exit 0, page count
   matches the baseline, `Tagged: yes`, 0 tagpdf errors, build converged, maths text layer clean.
   The deck passes every Step 4 gate while missing content.
-- **Measured** (ltx-talk 0.6.2 / CTAN `cat-version` 0.6.1, TeX Live 2026, LuaLaTeX). Eight-line
+- **Measured 2026-09-09** (ltx-talk 0.6.2 dated 2026-09-07 / CTAN `cat-version` 0.6.1, TeX Live
+  2026 rev 80207, LuaLaTeX). Eight-line
   MWEs, no course preamble, one frame each:
 
   | source | `Missing character` in log | `pdftotext` | veraPDF `-f ua2` |
@@ -843,10 +844,12 @@ records what would let it move up, or disappear.
   used character codes to Unicode values"). Exit 0, correct page count, `Tagged: yes`, 0 tagpdf
   errors, and **no** `Missing character` in the log — so C-GLYPH-MISSING's cheap grep does not
   see this one.
-- **Measured**, same environment and MWE shape as above:
+- **Measured 2026-09-09**, same environment and MWE shape as above:
 
   | source | legacy font pulled | `pdftotext` | veraPDF `-f ua2` |
   |---|---|---|---|
+  | `$\leadsto$` (amssymb **and** wasysym) | `wasy10` | **`A ; B`** | `8.4.5.8-1` |
+  | `$\leadsto$` (amssymb alone) | none | `A ⇝ B` | clean |
   | `$\Box$` (wasysym) | `wasy10` | **`A 2 B`** | `8.4.5.8-1` |
   | `\diameter` (wasysym) | `wasy10` | **`A B`** — nothing at all | `8.4.5.8-1` |
   | `\Checkmark` (bbding) | `bbding` | ok | `8.4.5.8-1` (2 checks) |
@@ -854,6 +857,22 @@ records what would let it move up, or disappear.
   | `\ding{51}` (pifont) | `Dingbats` | ok | **clean** |
   | `$\Box$` (amssymb) | none | `A □ B` | clean |
 
+- ⚠ **You do not have to use a wasysym command to hit this.** `wasysym` **redefines**
+  `\leadsto`, which `amssymb` also provides. A deck that loads both — in either order — and
+  writes `$\leadsto$` gets the `wasy10` glyph, and nothing in the source names `wasysym`.
+  Found exactly this way on a real course deck: the only wasysym-defined command in its source
+  was `\leadsto`, and the built PDF embeds `wasy10`. Cross-check a deck's commands against the
+  package rather than grepping for obviously-wasysym names:
+  ```sh
+  grep -oE '\\[A-Za-z]+' deck.tex | sort -u > /tmp/used
+  grep -oE '\\(DeclareMathSymbol|newcommand|DeclareRobustCommand|def)\s*\{?\\[A-Za-z]+' \
+      "$(kpsewhich wasysym.sty)" | grep -oE '\\[A-Za-z]+$' | sort -u > /tmp/wasy
+  comm -12 /tmp/used /tmp/wasy        # every command this deck takes from wasysym
+  ```
+- ⚠ **`\leadsto` extracts as `;`, which is also C-PDFTEX-MATH's signature.** The Step 4 grep
+  `pdftotext deck.pdf - | grep -n '[a-z]; [a-z]'` fires on it. So a hit on that check means
+  *either* the deck was built with pdfTeX *or* it has this defect — check the engine before
+  concluding which. Two unrelated causes, one visible signature.
 - ⚠ **The text-layer corruption is inherited, not introduced.** The same `$\Box$` under
   **Beamer + pdfTeX** also extracts as `2` (measured). So this is not a compromise ltx-talk
   causes; it is a pre-existing defect in the deck that nobody noticed, because an untagged

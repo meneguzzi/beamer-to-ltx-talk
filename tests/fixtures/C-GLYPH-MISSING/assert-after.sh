@@ -3,3 +3,4 @@
 . "$ASSERT_LIB"
 must_contain "✓"
 must_not_be_in_log "Missing character"
+must_not_fail_ua2 8.4.5.9-1
