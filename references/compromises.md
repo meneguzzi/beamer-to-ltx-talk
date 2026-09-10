@@ -795,6 +795,108 @@ records what would let it move up, or disappear.
 - **Revisit when:** ltx-talk gives the pdfTeX path a maths font with correct ToUnicode maps, or
   drops the pdfTeX fallback. Verified present on 0.6.0.
 
+## C-GLYPH-MISSING — a character the font lacks is dropped from the slide  ⚠ silent
+
+- **Symptom: none.** The character is simply absent from the rendered slide. Exit 0, page count
+  matches the baseline, `Tagged: yes`, 0 tagpdf errors, build converged, maths text layer clean.
+  The deck passes every Step 4 gate while missing content.
+- **Measured 2026-09-09** (ltx-talk 0.6.2 dated 2026-09-07 / CTAN `cat-version` 0.6.1, TeX Live
+  2026 rev 80207, LuaLaTeX). Eight-line
+  MWEs, no course preamble, one frame each:
+
+  | source | `Missing character` in log | `pdftotext` | veraPDF `-f ua2` |
+  |---|---|---|---|
+  | `\checkmark` (amssymb) | 3 | `A <U+FFFD> B` | `8.4.5.9-1` |
+  | `\checkmark` (wasysym) | 3 | `A <U+FFFD> B` | `8.4.5.9-1` |
+  | literal `✓`, no package at all | 3 | `A <U+FFFD> B` | `8.4.5.9-1` |
+  | `$\Box$` (amssymb) | 0 | `A □ B` | clean |
+
+- **Cause:** ltx-talk's default text font is `NewCMSans10-Regular`, which has no U+2713. LuaTeX
+  drops the character, logs `Missing character`, writes U+FFFD into the text layer, and
+  references glyph 0 — `.notdef` — from a text-showing operator, which PDF/UA-2 forbids
+  outright (`8.4.5.9-1`). **Not package-specific**: the same three symptoms appear with no
+  package loaded at all, so this is about the font's coverage, not about `\checkmark`.
+- **Three signals, and any one of them catches it.** The log grep is free and needs no tooling:
+  ```sh
+  grep -c 'Missing character' deck.log            # must be 0
+  pdftotext deck.pdf - | grep -c $'�'        # must be 0
+  ```
+- **Workaround:** use a character the font has. Verified clean on the MWE above — renders,
+  extracts as a correct `✓`, and passes `-f ua2`:
+  ```latex
+  \usepackage{pifont}
+  A \ding{51} B
+  ```
+  To keep the literal character in the source instead, map it once:
+  ```latex
+  \usepackage{newunicodechar}\usepackage{pifont}
+  \newunicodechar{✓}{\ding{51}}
+  ```
+- ⚠ **`\checkmark` appears in C-PDFTEX-MATH for a different failure** — under pdfTeX it extracts
+  as `X`. Same command, two unrelated mechanisms, and each can mask the other: rebuilding with
+  LuaLaTeX fixes the extraction and *introduces* the dropped glyph.
+- **Revisit when:** ltx-talk gains a font fallback for characters outside the main font.
+
+## C-SYMBOL-FONT-TOUNICODE — a legacy symbol package's ToUnicode map omits the glyph it uses  ⚠ silent; wrong character in the text layer
+
+- **Symptom: none.** The symbol renders correctly on the slide. But the text layer hands back a
+  *different* character, and the file fails PDF/UA-2 `8.4.5.8-1` ("shall define the map of all
+  used character codes to Unicode values"). Exit 0, correct page count, `Tagged: yes`, 0 tagpdf
+  errors, and **no** `Missing character` in the log — so C-GLYPH-MISSING's cheap grep does not
+  see this one.
+- **Measured 2026-09-09**, same environment and MWE shape as above:
+
+  | source | legacy font pulled | `pdftotext` | veraPDF `-f ua2` |
+  |---|---|---|---|
+  | `$\leadsto$` (amssymb **and** wasysym) | `wasy10` | **`A ; B`** | `8.4.5.8-1` |
+  | `$\leadsto$` (amssymb alone) | none | `A ⇝ B` | clean |
+  | `$\Box$` (wasysym) | `wasy10` | **`A 2 B`** | `8.4.5.8-1` |
+  | `\diameter` (wasysym) | `wasy10` | **`A B`** — nothing at all | `8.4.5.8-1` |
+  | `\Checkmark` (bbding) | `bbding` | ok | `8.4.5.8-1` (2 checks) |
+  | `\Letter` (marvosym) | `MarVoSym` | ok | `8.4.5.8-1` (2 checks) |
+  | `\ding{51}` (pifont) | `Dingbats` | ok | **clean** |
+  | `$\Box$` (amssymb) | none | `A □ B` | clean |
+
+- ⚠ **You do not have to use a wasysym command to hit this.** `wasysym` **redefines**
+  `\leadsto`, which `amssymb` also provides. A deck that loads both — in either order — and
+  writes `$\leadsto$` gets the `wasy10` glyph, and nothing in the source names `wasysym`.
+  Found exactly this way on a real course deck: the only wasysym-defined command in its source
+  was `\leadsto`, and the built PDF embeds `wasy10`. Cross-check a deck's commands against the
+  package rather than grepping for obviously-wasysym names:
+  ```sh
+  grep -oE '\\[A-Za-z]+' deck.tex | sort -u > /tmp/used
+  grep -oE '\\(DeclareMathSymbol|newcommand|DeclareRobustCommand|def)\s*\{?\\[A-Za-z]+' \
+      "$(kpsewhich wasysym.sty)" | grep -oE '\\[A-Za-z]+$' | sort -u > /tmp/wasy
+  comm -12 /tmp/used /tmp/wasy        # every command this deck takes from wasysym
+  ```
+- ⚠ **`\leadsto` extracts as `;`, which is also C-PDFTEX-MATH's signature.** The Step 4 grep
+  `pdftotext deck.pdf - | grep -n '[a-z]; [a-z]'` fires on it. So a hit on that check means
+  *either* the deck was built with pdfTeX *or* it has this defect — check the engine before
+  concluding which. Two unrelated causes, one visible signature.
+- ⚠ **The text-layer corruption is inherited, not introduced.** The same `$\Box$` under
+  **Beamer + pdfTeX** also extracts as `2` (measured). So this is not a compromise ltx-talk
+  causes; it is a pre-existing defect in the deck that nobody noticed, because an untagged
+  Beamer PDF makes no conformance claim. What conversion changes is the *consequence*: the
+  converted deck declares `pdfstandard={a-4,ua-2}` and therefore now **fails** validation on
+  something it was always doing. Do not expect a page-count or before/after text comparison to
+  flag it — both are identical.
+- **Cause:** these packages pull a Type 1 font with a **Builtin** encoding. LuaTeX *does* emit a
+  `/ToUnicode` CMap for it — so "the font has no ToUnicode map" is not what happens — but the
+  map is **incomplete**. On the `$\Box$` probe veraPDF names the used glyph as code 50 (`0x32`),
+  while the CMap maps only 14 codes: `0x00 0x05 0x0C 0x19 0x1A 0x1B 0x26 0x2E 0x35 0x4E 0x54
+  0x67 0x69 0x6A`. `0x32` is not among them. With no mapping, an extractor falls back to the
+  raw code byte, and `0x32` is ASCII `2` — which is exactly what comes out. `pifont` passes
+  because its map covers 37 codes, including the ones it shows.
+- ⚠ **`pdffonts` cannot detect this.** Its `uni` column reads `yes` for `wasy10`, `bbding`,
+  `MarVoSym` **and** `Dingbats`, while three of those four fail. The column says a `/ToUnicode`
+  exists, not that it covers the glyphs used. Detection needs `verapdf -f ua2`, or reading the
+  CMap and comparing it against the codes actually shown.
+- **Workaround:** substitute the package, not the preamble — there is nothing to shim, the
+  defect is in the font's embedded map. Verified clean above: `amssymb` for maths symbols
+  (`$\Box$` → `□`, `$\varnothing$` → `∅`), `pifont` for dingbats. This is a source change, so
+  budget for it: a course preamble that loads `wasysym` globally exposes every deck.
+- **Revisit when:** LuaTeX emits complete `/ToUnicode` CMaps for builtin-encoded Type 1 fonts.
+
 ## C-DISPLAY-DOLLAR — `$$…$$` silently outdents every list item after it  ⚠ silent, ltx-talk only
 
 - **Symptom:** in an `itemize`, every `\item` after a `$$…$$` display loses its indentation and
@@ -1355,6 +1457,8 @@ records what would let it move up, or disappear.
 | bare `[b]`/`[t]`/`[c]` frame option | discarded whole; aligned frames render centred | `--lint` | C-FRAME-OPT |
 | `pdfstandard=` without `ua-2` | PDF declares no PDF/UA conformance | `--lint` | C-NO-UA2 |
 | `\includegraphics` without `alt=` | screen reader reads out the filename | log warning | `alt-text.md` |
+| a character outside the font's coverage | the character is absent from the slide | `grep 'Missing character'` | C-GLYPH-MISSING |
+| `wasysym`/`bbding`/`marvosym` symbol | text layer returns a different character | PDF/UA checker | C-SYMBOL-FONT-TOUNICODE |
 | frame titles roled `H4` by the class | "headings do not begin at level one" | PDF/UA checker | A-HEADINGS |
 | every `tabular` is a `Table` with no `TH` | "tables missing headers", including layout grids | PDF/UA checker | A-TABLE-TH |
 | saturated emphasis colours | "text with insufficient contrast" | PDF/UA checker | A-CONTRAST |

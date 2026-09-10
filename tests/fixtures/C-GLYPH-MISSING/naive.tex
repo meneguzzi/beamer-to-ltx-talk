@@ -1,0 +1,14 @@
+% The conversion WITHOUT the workaround: \checkmark carried over unchanged. It compiles, the
+% page count is right and the PDF is tagged, but the character is ABSENT from the slide.
+% The log says Missing character, the text layer gets U+FFFD, and the content stream
+% references glyph 0 (.notdef), which fails PDF/UA-2 clause 8.4.5.9-1.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+\usepackage{amssymb}
+
+\begin{document}
+\begin{frame}
+\frametitle{Coverage}
+Marked A \checkmark\ B done.
+\end{frame}
+\end{document}

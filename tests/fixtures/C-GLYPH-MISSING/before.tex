@@ -1,0 +1,11 @@
+% Beamer original. \checkmark from amssymb renders AND extracts correctly as U+2713 here
+% (measured: pdftotext gives "Marked A ✓ B done."), with no Missing character in the log.
+% That is the property the conversion has to preserve, and the naive conversion loses it.
+\documentclass{beamer}
+\usepackage{amssymb}
+
+\begin{document}
+\begin{frame}{Coverage}
+Marked A \checkmark\ B done.
+\end{frame}
+\end{document}

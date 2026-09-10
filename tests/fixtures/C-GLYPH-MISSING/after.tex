@@ -1,0 +1,22 @@
+% Converted, ltx-talk, C-GLYPH-MISSING workaround applied: the character comes from a font
+% that has it. pifont's \ding{51} renders, extracts as a correct U+2713, logs no Missing
+% character, and passes verapdf -f ua2 -- verified on this file.
+%
+% Things that do NOT work: \checkmark from amssymb OR from wasysym, and a literal ✓ typed
+% into the source, all three identically. The default text font NewCMSans10-Regular has no
+% U+2713, so LuaTeX drops the character, and the package that names it is irrelevant.
+%
+% Alternative, if you want the literal character to stay in the source:
+%   \usepackage{newunicodechar}\usepackage{pifont}
+%   \newunicodechar{✓}{\ding{51}}
+% Also verified clean. Not used here because the fixture should test the smaller change.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+\usepackage{pifont}
+
+\begin{document}
+\begin{frame}
+\frametitle{Coverage}
+Marked A \ding{51} B done.
+\end{frame}
+\end{document}

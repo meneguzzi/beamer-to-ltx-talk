@@ -198,3 +198,78 @@ must_have_struct_count() {
   [ "$got" = "$want" ] || fail "expected $want /S /$kind element(s), got $got"
   note "/S /$kind = $got"
 }
+
+# --- PDF/UA-2 validation (veraPDF) -------------------------------------------
+#
+# Two of the font-level defects in the catalogue have NO cheap signal:
+# C-SYMBOL-FONT-TOUNICODE compiles clean, is tagged, logs nothing, and is only
+# visible to a real validator. So these helpers call verapdf.
+#
+# They assert on a NAMED CLAUSE, never on overall PASS/FAIL. The fixtures are
+# minimal decks with no \title, so every one of them fails 8.11.1-1 (the XMP
+# metadata clause) on its own account. Asserting "passes ua2" would therefore be
+# false for all of them, and asserting "fails ua2" would be true for the wrong
+# reason. A clause is the only claim that isolates the defect.
+#
+# If verapdf is not installed the helpers NOTE and pass, so a contributor
+# without it still gets a green suite. CI must not rely on that: the workflow
+# installs verapdf and checks it is on PATH, so a broken install fails loudly
+# there rather than silently skipping these assertions.
+
+# ua2_clauses -- failing clause ids for $PDF, space separated, e.g. "8.11.1-1".
+#
+# NB: verapdf exits 1 for a NON-COMPLIANT file, which is the normal case here and
+# not an error. Only a missing or unparseable report means the run failed. An
+# earlier version of this treated exit 1 as "could not run" and returned no
+# clauses at all, which made must_not_fail_ua2 pass vacuously for every fixture.
+ua2_clauses() {
+  local x; x=$(mktemp)
+  verapdf -f ua2 --format xml "$PDF" > "$x" 2>/dev/null
+  if [ ! -s "$x" ] || ! grep -q '<report' "$x"; then
+    rm -f "$x"; echo "VERAPDF-DID-NOT-RUN"; return
+  fi
+  python3 - "$x" <<'PY'
+import re, sys
+s = open(sys.argv[1], encoding='utf-8', errors='replace').read()
+out = []
+for m in re.finditer(r'<rule\b[^>]*>', s):
+    tag = m.group(0)
+    cl = re.search(r'clause="([^"]+)"', tag)
+    tn = re.search(r'testNumber="(\d+)"', tag)
+    fc = re.search(r'failedChecks="(\d+)"', tag)
+    st = re.search(r'status="([A-Z]+)"', tag)
+    if cl and tn and ((fc and fc.group(1) != '0') or (st and st.group(1) == 'FAILED')):
+        out.append(f"{cl.group(1)}-{tn.group(1)}")
+print(' '.join(sorted(set(out))))
+PY
+  rm -f "$x"
+}
+
+_ua2_skip() {
+  command -v verapdf >/dev/null 2>&1 && return 1
+  note "verapdf not installed; skipping the PDF/UA-2 clause check"
+  return 0
+}
+
+# must_fail_ua2 8.4.5.8-1 -- the defect must be visible to a real validator.
+must_fail_ua2() {
+  _ua2_skip && return 0
+  local want="$1" got; got=$(ua2_clauses)
+  [ "$got" = "VERAPDF-DID-NOT-RUN" ] && fail "verapdf produced no report for $PDF"
+  case " $got " in
+    *" $want "*) note "veraPDF ua2 fails $want, as the defect requires (all: ${got:-none})" ;;
+    *) fail "expected veraPDF -f ua2 to fail clause $want; failing clauses were: ${got:-none}" ;;
+  esac
+}
+
+# must_not_fail_ua2 8.4.5.8-1 -- the workaround must clear that clause. Says
+# nothing about any other clause, deliberately: see the note above.
+must_not_fail_ua2() {
+  _ua2_skip && return 0
+  local want="$1" got; got=$(ua2_clauses)
+  [ "$got" = "VERAPDF-DID-NOT-RUN" ] && fail "verapdf produced no report for $PDF"
+  case " $got " in
+    *" $want "*) fail "veraPDF -f ua2 still fails clause $want; failing clauses: $got" ;;
+    *) note "veraPDF ua2 does not fail $want (other clauses: ${got:-none})" ;;
+  esac
+}

@@ -1,0 +1,25 @@
+% The conversion with wasysym left in place. It renders correctly, compiles clean, is
+% tagged, and has NO Missing character in the log -- so C-GLYPH-MISSING's cheap log grep
+% does not see this one. What is wrong is the text layer: $\leadsto$ comes back as ";".
+%
+% amssymb is loaded FIRST here on purpose. wasysym redefines \leadsto, so load order does not
+% save you and the source names no wasysym command at all.
+%
+% ";" is also C-PDFTEX-MATH's signature, so the Step 4 maths-corruption grep fires on this
+% file for an entirely different reason. Check the engine before concluding which you have.
+%
+% Mechanism: wasysym pulls the Type 1 font wasy10 with a Builtin encoding. LuaTeX does emit
+% a /ToUnicode CMap for it, but an incomplete one -- veraPDF names the used glyph as code 50
+% and the CMap maps only 14 codes, not including it. With no mapping an extractor falls back
+% to the raw code byte. Fails PDF/UA-2 clause 8.4.5.8-1.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+\usepackage{amssymb}
+\usepackage{wasysym}
+
+\begin{document}
+\begin{frame}
+\frametitle{Symbol source}
+State A $\leadsto$ B done.
+\end{frame}
+\end{document}

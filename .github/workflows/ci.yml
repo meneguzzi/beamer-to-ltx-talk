@@ -94,5 +94,45 @@ jobs:
       - name: Install poppler-utils and qpdf
         run: apt-get update && apt-get install -y poppler-utils qpdf
 
+      # Two font-level entries in the catalogue (C-GLYPH-MISSING, C-SYMBOL-FONT-TOUNICODE)
+      # compile clean, report Tagged: yes and log nothing. One of them has no cheap signal at
+      # all, so the only thing that sees it is a real PDF/UA-2 validator. veraPDF is a Java
+      # app with no Debian package, installed here from its own unattended installer.
+      #
+      # Cost, measured: ~45-60s once per job for the JRE and the installer, then ~0.9s per
+      # validation, and the suite makes four. The fixture assertions skip themselves when
+      # verapdf is absent so contributors without it still get a green local suite -- which is
+      # exactly why the version check at the end of this step matters: a broken install here
+      # must fail the job, not quietly disable those assertions.
+      - name: Install veraPDF (PDF/UA-2 validator)
+        run: |
+          set -e
+          apt-get install -y default-jre-headless unzip curl
+          curl -sSL https://software.verapdf.org/releases/verapdf-installer.zip -o /tmp/verapdf.zip
+          unzip -q /tmp/verapdf.zip -d /tmp/verapdf
+          cat > /tmp/auto-install.xml <<'XML'
+          <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+          <AutomatedInstallation langpack="eng">
+            <com.izforge.izpack.panels.htmlhello.HTMLHelloPanel id="welcome"/>
+            <com.izforge.izpack.panels.target.TargetPanel id="install_dir">
+              <installpath>/opt/verapdf</installpath>
+            </com.izforge.izpack.panels.target.TargetPanel>
+            <com.izforge.izpack.panels.packs.PacksPanel id="sdk_pack_select">
+              <pack index="0" name="veraPDF GUI" selected="true"/>
+              <pack index="1" name="veraPDF Mac and *nix Scripts" selected="true"/>
+            </com.izforge.izpack.panels.packs.PacksPanel>
+            <com.izforge.izpack.panels.install.InstallPanel id="install"/>
+            <com.izforge.izpack.panels.finish.FinishPanel id="finish"/>
+          </AutomatedInstallation>
+          XML
+          # The installer script's name has moved between releases, so find it rather than
+          # hard-coding it.
+          installer=$(find /tmp/verapdf -maxdepth 2 -type f \( -name 'verapdf-install' -o -name 'vera-install' \) | head -1)
+          test -n "$installer" || (echo "::error::no veraPDF installer script found in the zip"; ls -R /tmp/verapdf; exit 1)
+          chmod +x "$installer"
+          "$installer" /tmp/auto-install.xml
+          ln -sf /opt/verapdf/verapdf /usr/local/bin/verapdf
+          verapdf --version || (echo "::error::verapdf installed but not runnable - the fixture UA-2 assertions would silently skip"; exit 1)
+
       - name: Build and assert MWE fixtures (tests/fixtures/*/)
         run: bash tests/run_fixtures.sh
