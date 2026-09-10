@@ -87,8 +87,9 @@ A fixture's `assert-<variant>.sh` runs with the cwd set to the build directory a
 and `LOG` in the environment. The library provides `must_contain` / `must_not_contain`,
 `must_share_xmin` / `must_differ_xmin` / `must_ymin_above` / `must_ymin_below` (via
 `pdftotext -bbox`), `must_have_pages`, `must_be_tagged`, `struct_count`,
-`must_have_mathml` / `must_have_no_mathml`, and `log_count`. Each failure message names the
-value observed, so a CI log says what was measured rather than only that something failed.
+`must_have_mathml` / `must_have_no_mathml`, `log_count`, and the pixel helpers below. Each
+failure message names the value observed, so a CI log says what was measured rather than only
+that something failed.
 
 ### PDF/UA-2 clauses (veraPDF)
 
@@ -117,6 +118,46 @@ validation, of which the suite does four.
 "could not run" is a real trap — an early version of `ua2_clauses` did, and returned no clauses
 at all, which made `must_not_fail_ua2` pass vacuously for every fixture. Only a missing or
 unparseable report means the run failed.
+
+### Rendered pixels (pdftoppm)
+
+Several entries fail in a way that leaves the text layer, the log, the page count and the
+structure tree all correct while the page renders wrong. `C-BACKGROUND` is the worked case:
+stub `\usebackgroundtemplate` out and the deck still compiles to 4 pages, still reports
+`Tagged: yes`, and renders white text on a white page. So `assert.sh` renders the page with
+`pdftoppm` and measures it:
+
+```sh
+must_be_painted 1 0.00 0.00 1.00 1.00     # page 1 is ink edge to edge
+must_be_blank   3 0.10 0.30 0.90 0.70     # nothing drawn in page 3's body
+must_frac_nonwhite_between 1 0 0 1 0.2 0.30 0.60   # the primitive, with bounds you measured
+pixel_at 1 0.5 0.5                        # "R G B"
+region_mean 1 0 0 1 1                     # "R G B", mean over the region
+frac_nonwhite 1 0 0 1 1                   # 0.0000 to 1.0000
+```
+
+Regions are **fractions** of page width and height with y from the **top**, the same
+convention as `pdftotext -bbox` and `must_ymin_frac_between`. A pixel counts as non-white when
+any channel is below `PIXEL_WHITE_MIN` (default 250 of 255); antialiasing a glyph edge against
+white lands in the 230s, so a cutoff at 255 would score the blank margin of any page as
+painted. `must_be_blank` allows 2% for ink bleeding in from just outside the region, and
+`must_be_painted` requires 90%. Neither is for text: a region of prose is mostly white paper,
+so measure that with `must_frac_nonwhite_between` and a band you have observed.
+
+Rendering is `pdftoppm -r $PIXEL_DPI -singlefile` (default 70, as in SKILL.md Step 4), cached
+per page. `tests/lib/pixelprobe.py` parses the Netpbm raster directly — no Pillow, no new
+dependency, and `pdftoppm` is already part of the `poppler-utils` the suite requires, so this
+adds no CI install step.
+
+**There are deliberately no stored reference images.** A committed PNG rots on the first
+ltx-talk font or spacing change and tells nobody why it differed. Every claim here is a
+measurement with a stated tolerance instead.
+
+`tests/run_pixel_probe_selftest.sh` is how the probe is trusted at all. Its parser arm checks
+exact values against synthetic rasters (no LaTeX, no poppler); its rendered arm builds a
+two-page deck, painted then blank, and pairs **every** positive check with the inverted claim,
+which must be rejected. A probe that measured the wrong thing would make several fixtures agree
+with each other and be wrong together — which is #18 repeated. It runs in both CI jobs.
 
 **A failure means different things per variant, and that asymmetry is the point:**
 
@@ -182,8 +223,9 @@ in the head comment. Measured for the current set:
 ⚠ **`pdftotext` cannot verify overlays.** ltx-talk typesets every overlay branch once and
 toggles visibility with PDF OCG layers, so hidden content is still present in the extracted
 text. Extracting text from the `C-ONSLIDE-ARG` fixture gives *byte-identical* output for the
-broken and fixed versions while one of them renders an entirely blank page. Render to an
-image (`pdftoppm -r 50 -png`) and look at it.
+broken and fixed versions while one of them renders an entirely blank page. Look at the
+pixels: by hand with `pdftoppm -r 50 -png`, or in an assertion with the helpers above. The
+rows marked "no — visual" are the ones waiting on that (#10).
 
 A fixture that must *fail* is spelled `naive.tex` plus an `assert-naive.sh` asserting the
 defect. Note it still has to **compile** — the runner requires that of every variant, and for
