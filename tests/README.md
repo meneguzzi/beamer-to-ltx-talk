@@ -171,7 +171,7 @@ in the head comment. Measured for the current set:
 | `C-HANDOUT-MODE` | handout stacks all overlays on one page | no — handout build only |
 | `C-DISPLAY-DOLLAR` | items after the display outdent to the frame margin | **yes** — `assert-*.sh`, `xMin` 50.165 vs 28.346 |
 | `C-FRAME-OPT` | `[b]` frame renders centred instead of bottom-aligned | no — needs `pdftotext -bbox` (`yMin` 135.76 vs 247.96) |
-| `C-FRAMETITLE` | title renders as body text, header bar empty | no — visual |
+| `C-FRAMETITLE` | title renders as body text, header bar empty | **yes** — `assert-*.sh`, `yMin` 0.475 vs 0.023 of page height |
 | `C-FRAMETITLE-NESTED` | nested-brace title renders as body text, also behind an overlay spec | yes |
 | `C-TITLEPAGE` | **retired** — the overlap does not reproduce on 0.5.3 or 0.6.2, four variants measured | n/a — deliberately no `naive.tex`, see the fixture's head comment |
 | `C-BACKGROUND` | stubbed out, the background page is 99% white under white text; unscoped, it leaks onto page 3 | no — visual; sample the page, or count `/S /Figure` |
