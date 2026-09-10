@@ -333,16 +333,38 @@ records what would let it move up, or disappear.
   (C-FRAMETITLE) and the conflict disappears.
 - **Revisit when:** n/a.
 
-## C-TITLEPAGE — `\maketitle` fills the frame; trailing content overlaps
+## C-TITLEPAGE — the overlap is FIXED; only a styling preference remains  ✅ retired
 
-- **Symptom:** the "Material adapted from …" block that Beamer decks add after `\maketitle`
-  prints **on top of** the title.
-- **Cause:** ltx-talk's `\maketitle` produces a full, vertically-centred frame; anything
-  after it in the same frame overlaps. The stock title is also bare (limited styling).
-- **Workaround:** use a custom title frame — `\coursetitlepage{title}{subtitle}{attribution}`
-  (see `preamble-template.tex`) — that lays out title, authors, institute and an attribution
-  slot. Keep `\title`/`\author` as metadata for the footer/PDF info.
-- **Revisit when:** a full title-page template ships (known limitation in 0.5.0).
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — no longer reproduces (measured, four variants; see
+  below)
+- **The original symptom is gone.** It was: the "Material adapted from …" block that Beamer
+  decks put after `\maketitle` printed **on top of** the title, because ltx-talk's `\maketitle`
+  produced a full, vertically-centred frame. Reported against 0.5.0; the fixture already
+  recorded it not reproducing on 0.5.3, and it does not reproduce on 0.6.2 either.
+- **Measured 2026-09-10** (`pdftotext -bbox`, `yMin` in points, page height 283.465), plain
+  `\maketitle` plus trailing content in one frame:
+
+  | variant | title `yMin`–`yMax` | attribution `yMin` | overlap |
+  |---|---|---|---|
+  | `\maketitle` + `\vfill` + attribution | 98.99–119.97 | 180.64 | none, 61pt clear |
+  | same, long multi-line attribution block | 92.21–113.20 | 173.86 | none |
+  | same, no `\vfill` at all | 98.99–119.97 | 180.64 | none |
+  | `\maketitle` outside any frame | 105.63–126.61 | n/a, own page | none |
+
+  The fixture's own hypothesis — that the trigger needs more than a minimal frame — does not
+  hold up: a realistic attribution block behaves the same as a one-liner.
+- **What is left is a preference, not a defect.** The stock title is plainly styled, so
+  `\coursetitlepage{title}{subtitle}{attribution}` in `assets/preamble-template.tex` still buys
+  a designed layout with an attribution slot. That is a reason to keep using it, not a
+  workaround for a bug. Either form is correct; keep `\title`/`\author` as metadata for the
+  footer and PDF info regardless.
+- ⚠ **Do not read this entry as a reason to hand-roll a title frame.** A deck already carrying
+  `\coursetitlepage` is fine and needs no change. A *new* conversion can use plain
+  `\maketitle`. **#7** owns the follow-through — restyling ltx-talk's native `\maketitle` so
+  there is one source of truth and a tagged title — and is the right place for that decision.
+- ⚠ **This retirement is a point-in-time measurement, not a self-maintaining one.** The fixture
+  has no `naive.tex`, because a variant asserting a defect that no longer exists would report
+  `ADVISORY` on every run for ever. Nothing will tell us if the overlap comes back.
 
 ## C-NO-DOCMETA — a deck that never sets `\DocumentMetadata` half-loads ltx-talk  ⚠ cascade of "undefined"
 

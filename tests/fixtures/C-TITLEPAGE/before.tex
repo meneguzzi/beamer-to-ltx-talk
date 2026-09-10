@@ -3,11 +3,20 @@
 % \maketitle produces a full, vertically-centred frame, so the attribution prints
 % ON TOP of the title -- a known 0.5.0 limitation.
 %
-% ⚠ THAT SYMPTOM DID NOT REPRODUCE (measured 2026-08-24, ltx-talk 0.5.3): this
-% exact input compiles clean and renders the attribution BELOW the title block,
-% no overlap. Either it was fixed between 0.5.0 and 0.5.3, or the trigger needs
-% more than a minimal frame. Re-verify the catalogue entry before filing it
-% upstream. The after.tex layout is still a reasonable title frame either way.
+% ⚠ THAT SYMPTOM IS GONE, and the entry is retired. It did not reproduce on
+% 0.5.3 (measured 2026-08-24) and does not reproduce on 0.6.2 (measured
+% 2026-09-10). The "maybe the trigger needs more than a minimal frame"
+% hypothesis was tested and does NOT hold: plain \maketitle plus a long
+% multi-line attribution block, plus a no-\vfill variant, plus \maketitle
+% outside any frame, all place the attribution clear of the title (61pt of gap
+% in the minimal case). Numbers are in the C-TITLEPAGE entry.
+%
+% This fixture deliberately has NO naive.tex. A variant asserting a defect that
+% no longer exists would report ADVISORY on every run for ever. The consequence
+% is that nothing here would notice the overlap coming back.
+%
+% after.tex is kept because \coursetitlepage is still a reasonable title frame
+% -- now as a styling choice, not as a workaround. See #7.
 \documentclass{beamer}
 
 \title{Constraint Satisfaction}
