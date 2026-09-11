@@ -811,14 +811,21 @@ records what would let it move up, or disappear.
   ```
   Whitespace around `|` is trimmed. ⚠ **Marking only the overlays to drop produces a blank
   frame** — silently worse than doing nothing. This is a per-frame judgement, not a mechanical
-  rewrite: a genuine progressive build often should show every step in the handout. Unlike most
-  of this catalogue, `<handout:N>` works natively under Beamer, so a deck keeping Beamer as an
-  export target needs different source for the two backends.
+  rewrite: a genuine progressive build often should show every step in the handout.
+- **The matched pair is portable, so a deck can keep one source for both backends.** Measured
+  on 0.6.2 / TeX Live 2026: `\only<1| handout:0>` + `\only<2| handout:1>` gives 2 slide pages
+  and a 1-page handout showing the second step under **both** beamer and ltx-talk. What ltx-talk
+  lacks is beamer's frame-level `\begin{frame}<handout:N>`, which it parses and half implements
+  (row 3 above) — that is the form a deck has to be moved off.
 - **Detect:** `convert_deck.py --lint` flags every frame with 2+ `\only<n>{...}` sites and no
   `handout:` qualifier anywhere in the frame. Advisory, not a rewrite: a genuine progressive
   build is a legitimate reason for the finding to be a no-op, so it names candidate frames for
   a human rather than auto-annotating them. It cannot confirm the bug — **build the handout and
   look at it**, since a tag-soundness check on the handout passes regardless.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-HANDOUT-MODE/`,
+  `EXTRA_OUTPUTS="handout"`: the handout of an unqualified `\only` pair extracts as
+  "Step one Step two" on one page, against "Step two" with the matched pair; the slides build of
+  both is the same 2 pages with the same text layer)
 - **Revisit when:** ltx-talk implements frame-level `<handout:N>` selection, not just
   suppression.
 
