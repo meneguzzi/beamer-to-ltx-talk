@@ -62,6 +62,12 @@ jobs:
       - name: Pixel probe self-test, parser arm (tests/run_pixel_probe_selftest.sh)
         run: bash tests/run_pixel_probe_selftest.sh
 
+      # Source-level only: no LaTeX, no PDF. It shells out to kpsewhich/tex/git and
+      # degrades to [unknown] when they are absent, which is itself worth exercising
+      # in a job that has none of them.
+      - name: Conversion stamp self-test (tests/run_stamp_conversion_selftest.sh)
+        run: bash tests/run_stamp_conversion_selftest.sh
+
       - name: Lint C-HANDOUT-MODE (fires on before.tex, silent on after.tex)
         run: |
           set -e
