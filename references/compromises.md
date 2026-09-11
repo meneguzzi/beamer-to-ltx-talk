@@ -568,6 +568,12 @@ records what would let it move up, or disappear.
   problem. Keep a `frame*` down to the listing plus the minimum around it, put anything that
   matters pedagogically *outside* the frame as tagged content, and audit how much of the
   course is inside `frame*`: `grep -c 'begin{frame\*}' week*/*.tex`.
+- **Verified:** 2026-09-11, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-FRAMESTAR-TAG/after.tex`
+  with the two hooks deleted and nothing else changed: exit 1 and 2 tagpdf errors, `there is no
+  open structure on the stack` and `The number of automatic begin (4) and end (5) text para hooks
+  differ!`; with the hooks, exit 0 and 0 errors). The fixture cannot carry that as a `naive.tex` —
+  the runner requires every variant to compile, so `before.tex`'s compile is the test. Whether
+  the *fixed* build still leaves poppler's `Mismatched EMC operator` is #11, not this entry.
 - **Revisit when:** ltx-talk's `frame*` stops re-tokenising, or `listings` becomes tag-aware.
 
 ## C-NOBEAMER — all `\usetheme`/`\setbeamer*`/`\usebeamerfont` are undefined
@@ -985,7 +991,7 @@ records what would let it move up, or disappear.
 - **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-SYMBOL-FONT-TOUNICODE/`, text layer + veraPDF `8.4.5.8-1`)
 - **Revisit when:** LuaTeX emits complete `/ToUnicode` CMaps for builtin-encoded Type 1 fonts.
 
-## C-DISPLAY-DOLLAR — `$$…$$` silently outdents every list item after it  ⚠ silent, ltx-talk only
+## C-DISPLAY-DOLLAR — `$$…$$` silently outdents every list item after it  ⚠ silent; any class under `\DocumentMetadata`
 
 - **Symptom:** in an `itemize`, every `\item` after a `$$…$$` display loses its indentation and
   renders flush with the frame margin, so the list visibly splits in two. Clean compile,
@@ -994,22 +1000,26 @@ records what would let it move up, or disappear.
   making vertical gaps uneven — cosmetic, unlike the outdent.
 - **Scale:** one 20-lecture course had this in **16 of 24 decks across 164 sites** (worst decks
   44, 23, 20, 16). It passed every gate and was found by eye, months after conversion.
-- **Measured** (ltx-talk 0.5.3, TeX Live 2026) — x-position of the item text in points via
-  `pdftotext -bbox`, same three-item list in each class:
+- **Measured** — x-position of the item text in points via `pdftotext -bbox`, same three-item
+  list in each class. Rows 1-3 on ltx-talk 0.5.3, row 4 added 2026-09-11 on 0.6.2:
 
   | class | `$$…$$` | `\[…\]` |
   |---|---|---|
-  | `article` | 158.7 / 158.7 / 158.7 | 158.7 / 158.7 / 158.7 |
-  | `beamer` | 50.2 / 50.2 / 50.2 | 50.2 / 50.2 / 50.2 |
+  | `article`, no `\DocumentMetadata` | 158.7 / 158.7 / 158.7 | 158.7 / 158.7 / 158.7 |
+  | `beamer` (cannot load `\DocumentMetadata` — C-NO-DOCMETA) | 50.2 / 50.2 / 50.2 | 50.2 / 50.2 / 50.2 |
   | **`ltx-talk`** | **50.0 / 28.3 / 28.3** | 50.0 / 50.0 / 50.0 |
+  | **`article`, `\DocumentMetadata{}`** | **158.7 / 133.8 / 133.8** | not measured |
 
-  Items 2 and 3 lose 21.7pt — exactly the `itemize` indent — and land on the frame margin.
-- **Cause: not pinned down.** Presumably ltx-talk applies its list indentation in a way raw
-  `$$` bypasses and `\[…\]` does not. What is established: not the tagging (reproduces under
-  `\DocumentMetadata{tagging=off}`), and not a local preamble (reproduces with the bare class, no packages).
-  ⚠ It is also **not** generic LaTeX `list` behaviour: the `\parshape` explanation is the first
-  thing that comes to mind and survives casual checking, but `article` uses the same `list`
-  machinery and is unaffected. Do not repeat it.
+  The later items lose exactly the `itemize` indent and land on the margin: 21.7pt under
+  ltx-talk, 24.9pt under `article`.
+- **Cause: `\DocumentMetadata`, not the class.** Row 4 is the discriminator — plain `article`
+  is clean until `\DocumentMetadata` is loaded, and then it outdents the same way. beamer is
+  unaffected because it cannot load `\DocumentMetadata` at all. So this is the kernel's
+  paragraph handling meeting raw `$$`, and ltx-talk only carries it in. Consistent with
+  `tagging=off` reproducing: the trigger is `\DocumentMetadata` itself, not tagging.
+  ⚠ **Do not conclude from a clean `article` run that this is ltx-talk-specific** — the run has
+  to load `\DocumentMetadata` to mean anything. Filing it against ltx-talk is a
+  misattribution; see the upstream note below.
 - **Workaround:** spell display math `\[…\]`. `convert_deck.py` rewrites this automatically,
   alternating `\[` and `\]` over the `$$` occurrences in file order, skipping comments and
   verbatim bodies, and refusing to rewrite at all if the total count is odd. Pure LaTeX, so the
@@ -1025,9 +1035,14 @@ records what would let it move up, or disappear.
 - **Limitation of any lexical pass:** `$a$$b$` — two adjacent inline maths with no space —
   reads as a `$$` to the converter, the lint and the grep. Rare; the converter reports its pair
   count so it can be eyeballed.
-- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-DISPLAY-DOLLAR/`; measurements below taken on 0.5.3/0.6.0)
-- **Revisit when:** filed upstream. Best-evidenced item in the catalogue, with a clean MWE;
-  issue #5 puts it first in the filing order. Not reported to ltx-talk as of 2026-08-27.
+- **Verified:** 2026-09-11, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-DISPLAY-DOLLAR/`;
+  cause re-attributed to `\DocumentMetadata` on this date, measurements above otherwise taken on
+  0.5.3/0.6.0)
+- **Upstream:** reported and rejected. `josephwright/ltx-talk#222` was closed `invalid` /
+  `not_planned` on 2026-06-15 — `$$…$$` is not LaTeX syntax — and the `article` reproduction was
+  posted in that thread. Do not refile it there.
+- **Revisit when:** the kernel's paragraph handling changes, or it is taken up by latex-lab. The
+  workaround is unaffected either way: `\[…\]` is correct LaTeX and costs nothing.
 
 ## C-DISPMATH-NEWLINE — `\\` after display math is invalid
 

@@ -69,7 +69,8 @@ Most are not in the upstream docs because they only surface under *tagging*
 >    page-count check passes while the text is gone (C-FRAMESUBTITLE). Documented upstream, so
 >    do not file it; fold both parts into `\frametitlesub{Title}{Subtitle}`.
 > 8. **`$$…$$` display math** → every `\item` after the display loses its list indentation
->    (C-DISPLAY-DOLLAR). ltx-talk only. `convert_deck.py` rewrites these to `\[…\]`.
+>    (C-DISPLAY-DOLLAR). Any class under `\DocumentMetadata`, not ltx-talk's own doing.
+>    `convert_deck.py` rewrites these to `\[…\]`.
 >
 > Three rules that follow from the above:
 >
