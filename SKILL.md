@@ -69,7 +69,8 @@ Most are not in the upstream docs because they only surface under *tagging*
 >    page-count check passes while the text is gone (C-FRAMESUBTITLE). Documented upstream, so
 >    do not file it; fold both parts into `\frametitlesub{Title}{Subtitle}`.
 > 8. **`$$…$$` display math** → every `\item` after the display loses its list indentation
->    (C-DISPLAY-DOLLAR). ltx-talk only. `convert_deck.py` rewrites these to `\[…\]`.
+>    (C-DISPLAY-DOLLAR). Any class under `\DocumentMetadata`, not ltx-talk's own doing.
+>    `convert_deck.py` rewrites these to `\[…\]`.
 >
 > Three rules that follow from the above:
 >
@@ -248,7 +249,7 @@ nothing. That was claimed and unchecked until it broke decks (#26); it is now en
 | Sections | *(left as-is)* | *(left as-is)* | the preamble's redefined `\section` emits the divider; the script only strips `\AtBeginSection` and **warns** the TOC outline is lost |
 | Centring | `\center{X}` | `\begin{center}X\end{center}` | C-CENTER-ARG — a declaration, not a command; fatal under tagging |
 | Verbatim frames | `[…,containsverbatim]{T}` | `\begin{frame*}` + `\frametitle{T}` | |
-| Title frame | `\maketitle` + trailing centred text | `\coursetitlepage{…}{…}{…}` | usually needs a **manual** finish |
+| Title frame | `\maketitle` + trailing centred text | `\coursetitlepage{…}{…}{…}` | usually needs a **manual** finish; styling and `H1`, not a bug fix — C-TITLEPAGE is retired |
 
 The script **never edits commented-out lines** and preserves indentation. It prints a
 summary of every change and every warning. Things it deliberately leaves for you to do by
@@ -277,6 +278,10 @@ grep -nE '^\s*\\begin\{frame\}(<[^>]*>)?(\[[^]]*\])?\{' deck.tex     # must retu
   Strip any `%` comments out of the attribution text as you fold it into the third argument —
   a stray `%` swallows the closing brace and you get `File ended while scanning use of
   \coursetitlepage`.
+  Note the *reason* changed: plain `\maketitle` no longer overlaps trailing content, so
+  C-TITLEPAGE is retired as a defect. `\coursetitlepage` is still what to use, for a designed
+  layout with an attribution slot and because it is where the deck's `H1` goes (A-HEADINGS).
+  Both forms are correct; a deck already using either needs no change.
 
 (`\end{frame}` → `\end{frame*}` pairing **is** now automatic — `convert_deck.py` walks the
 file after the line rewrites and closes every `frame*` properly.)

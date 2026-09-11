@@ -1,0 +1,30 @@
+% Converted, ltx-talk, C-HANDOUT-MODE workaround NOT applied -- the defect.
+%
+% A mechanical conversion leaves \only<1>{...} / \only<2>{...} exactly as Beamer had them, and
+% the slides build is then indistinguishable from the fixed deck: same 2 pages, same text layer.
+% The handout build is where they differ. ltx-talk implements only part of Beamer's mode
+% semantics, so with no handout: qualifier every overlay of the frame is printed on the one
+% handout page, stacked on top of each other.
+%
+% Measured on ltx-talk 0.6.2 / TeX Live 2026, lualatex, two passes:
+%
+%                                slides                 handout
+%   after.tex (matched pair)  2 pages, both steps   1 page, "Step two"
+%   this file (unqualified)   2 pages, both steps   1 page, "Step one Step two"
+%
+% Found converting a 20-deck course: 120 live sites across 13 decks, where each \only carried an
+% \includegraphics -- four images of a step-through printed on top of one another.
+%
+% This fixture has NO assert-after.sh for the slides output, on purpose. Any assertion true of
+% the fixed slides build is equally true of this one, so the runner's mutation check would
+% report it as VACUOUS -- correctly. That the slides build cannot tell these two files apart is
+% the entry. assert-naive.sh states it, and the real claims live in the [handout] assertions.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+
+\begin{document}
+\begin{frame}
+\only<1>{Step one}
+\only<2>{Step two}
+\end{frame}
+\end{document}

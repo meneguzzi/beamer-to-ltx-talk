@@ -1,10 +1,57 @@
 # Beamer → ltx-talk: compromises & incompatibilities
 
-Catalogue of problems found converting two real courses (11 decks, then 20) to **ltx-talk,
-verified across 0.5.0–0.5.2** (0.5.0 released 2026-04-30; dev branch needs LaTeX kernel
-2026-06-01). Each entry notes the specific version it was verified against. Each entry: **symptom → cause →
-workaround → revisit when**. Most only appear under tagging (`\DocumentMetadata`), which is
-why they are absent from the upstream quick-start docs.
+Catalogue of problems found converting two real courses (11 decks, then 20) to **ltx-talk**.
+Built against 0.5.0–0.5.2 (0.5.0 released 2026-04-30; dev branch needs LaTeX kernel 2026-06-01).
+Each entry: **symptom → cause → workaround → revisit when**. Most only appear under tagging
+(`\DocumentMetadata`), which is why they are absent from the upstream quick-start docs.
+
+## Version pins, and what a stale one means
+
+The installed class reports its own version and date, and that — not CTAN's catalogue label —
+is what a pin should record:
+
+```sh
+grep -m1 ProvidesExplClass "$(kpsewhich ltx-talk.cls)"
+#  \ProvidesExplClass {ltx-talk} {2026-09-07} {0.6.2}
+tlmgr info ltx-talk | grep -E 'cat-version|revision'     # cat-version: 0.6.1 -- lags
+```
+
+An entry that carries a **`Verified:`** line has had its symptom re-checked on the version named
+there. An entry without one has **not been re-checked** — which is not the same as "checked and
+found still broken". Do not read an old pin as evidence either way.
+
+Re-verification is a suite run, not a reading exercise. `tests/run_fixtures.sh` builds each
+fixture's `naive.tex`, the variant that carries the defect, and asserts the symptom is present:
+
+- the fixture reports **`OK`** → the symptom still reproduces on the installed ltx-talk;
+- the fixture reports **`ADVISORY`** → the defect is gone, and the entry is a **retirement
+  candidate**. The runner prints exactly that, and does not fail the build for it.
+
+So an entry gets a trustworthy pin by acquiring a `naive.tex`, after which the pin maintains
+itself. Which entries those are is **derivable from the repo**, not maintained by hand here:
+
+```sh
+for d in tests/fixtures/*/; do
+  [ -f "$d/assert-naive.sh" ] && echo "self-verifying  $(basename "$d")" \
+                              || echo "compiles only   $(basename "$d")"
+done
+```
+
+As of 2026-09-10 that is 8 self-verifying and 6 compile-only, out of 14 fixtures, against 43
+entries in this file. An entry with no fixture at all has nothing checking it — **#40** tracks
+the 29 in that state.
+
+One fixture is compile-only **on purpose**: `C-TITLEPAGE` is retired, and a `naive.tex`
+asserting a defect that no longer exists would report `ADVISORY` on every run for ever. The
+cost is that a retired entry has no self-maintaining check, so nothing notices if its defect
+comes back.
+
+`Verified:` lines have a fixed shape so they can be read by a script as well as by a person —
+`#12` (upgrade an already-converted deck) needs exactly this:
+
+```text
+- **Verified:** YYYY-MM-DD, ltx-talk X.Y.Z — <still reproduces|no longer reproduces> (<how>)
+```
 
 **Where a workaround lives matters as much as what it is.** ltx-talk is experimental and
 moving, so every entry here is temporary by design. A workaround that sits in the shared
@@ -103,6 +150,9 @@ records what would let it move up, or disappear.
   "no orphan titles" while the frame was still unconverted. Both regexes now accept an
   optional `(<[^>]*>)?` ahead of the options group. Only 2 instances found in one course,
   but they cost nothing to miss silently — always spot-check.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-FRAMETITLE/`;
+  the braced title lands at 0.475 of page height, the same line as the body text, against
+  0.023 for a real `\frametitle`)
 - **Revisit when:** n/a — `\frametitle` is the documented primary form; keep using it.
 
 ## C-FRAMETITLE-NESTED — the convert script silently skips nested-brace titles  ⚠ silent
@@ -124,6 +174,7 @@ records what would let it move up, or disappear.
   ```sh
   grep -nE '^\s*\\begin\{frame\}(<[^>]*>)?(\[[^]]*\])?\{' deck.tex
   ```
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-FRAMETITLE-NESTED/`, geometric assertion)
 - **Revisit when:** `convert_deck.py` grows a brace matcher of its own.
 
 ## C-FRAME-OPT — bare Beamer frame options are discarded  ⚠ silent; `[b]`/`[t]` render centred
@@ -208,6 +259,7 @@ records what would let it move up, or disappear.
   `t` (1 and 43), `b` (0 and 1) and `containsverbatim` (13 and 16).
 - **Detect before compiling:** `convert_deck.py --lint` reports `C-FRAME-OPT` for any option
   list holding a bare item. Hand-written frames keep reintroducing them.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-FRAME-OPT/`; measurements below taken on 0.6.0)
 - **Revisit when:** ltx-talk parses the list unconditionally, or errors on an unknown bare
   word. 0.6.1's *"Refine implementation of frame property storage"* (upstream #241) touches
   this machinery but does not change the behaviour — checked before it reached TeX Live here.
@@ -251,6 +303,7 @@ records what would let it move up, or disappear.
   ```
   The lint does not fire on the line defining a `\frametitlesub` dual-compile shim, whose
   Beamer-side body legitimately contains `\framesubtitle`.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-FRAMESUBTITLE/`; originally measured on 0.5.3)
 - **Revisit when:** a later release typesets the subtitle; `\frametitlesub` can then be retired.
 
 ## C-CENTER-ARG — `\center{…}` used as if it took an argument  ⚠ diagnosed nowhere near the fault
@@ -289,16 +342,38 @@ records what would let it move up, or disappear.
   (C-FRAMETITLE) and the conflict disappears.
 - **Revisit when:** n/a.
 
-## C-TITLEPAGE — `\maketitle` fills the frame; trailing content overlaps
+## C-TITLEPAGE — the overlap is FIXED; only a styling preference remains  ✅ retired
 
-- **Symptom:** the "Material adapted from …" block that Beamer decks add after `\maketitle`
-  prints **on top of** the title.
-- **Cause:** ltx-talk's `\maketitle` produces a full, vertically-centred frame; anything
-  after it in the same frame overlaps. The stock title is also bare (limited styling).
-- **Workaround:** use a custom title frame — `\coursetitlepage{title}{subtitle}{attribution}`
-  (see `preamble-template.tex`) — that lays out title, authors, institute and an attribution
-  slot. Keep `\title`/`\author` as metadata for the footer/PDF info.
-- **Revisit when:** a full title-page template ships (known limitation in 0.5.0).
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — no longer reproduces (measured, four variants; see
+  below)
+- **The original symptom is gone.** It was: the "Material adapted from …" block that Beamer
+  decks put after `\maketitle` printed **on top of** the title, because ltx-talk's `\maketitle`
+  produced a full, vertically-centred frame. Reported against 0.5.0; the fixture already
+  recorded it not reproducing on 0.5.3, and it does not reproduce on 0.6.2 either.
+- **Measured 2026-09-10** (`pdftotext -bbox`, `yMin` in points, page height 283.465), plain
+  `\maketitle` plus trailing content in one frame:
+
+  | variant | title `yMin`–`yMax` | attribution `yMin` | overlap |
+  |---|---|---|---|
+  | `\maketitle` + `\vfill` + attribution | 98.99–119.97 | 180.64 | none, 61pt clear |
+  | same, long multi-line attribution block | 92.21–113.20 | 173.86 | none |
+  | same, no `\vfill` at all | 98.99–119.97 | 180.64 | none |
+  | `\maketitle` outside any frame | 105.63–126.61 | n/a, own page | none |
+
+  The fixture's own hypothesis — that the trigger needs more than a minimal frame — does not
+  hold up: a realistic attribution block behaves the same as a one-liner.
+- **What is left is a preference, not a defect.** The stock title is plainly styled, so
+  `\coursetitlepage{title}{subtitle}{attribution}` in `assets/preamble-template.tex` still buys
+  a designed layout with an attribution slot. That is a reason to keep using it, not a
+  workaround for a bug. Either form is correct; keep `\title`/`\author` as metadata for the
+  footer and PDF info regardless.
+- ⚠ **Do not read this entry as a reason to hand-roll a title frame.** A deck already carrying
+  `\coursetitlepage` is fine and needs no change. A *new* conversion can use plain
+  `\maketitle`. **#7** owns the follow-through — restyling ltx-talk's native `\maketitle` so
+  there is one source of truth and a tagged title — and is the right place for that decision.
+- ⚠ **This retirement is a point-in-time measurement, not a self-maintaining one.** The fixture
+  has no `naive.tex`, because a variant asserting a defect that no longer exists would report
+  `ADVISORY` on every run for ever. Nothing will tell us if the overlap comes back.
 
 ## C-NO-DOCMETA — a deck that never sets `\DocumentMetadata` half-loads ltx-talk  ⚠ cascade of "undefined"
 
@@ -493,6 +568,12 @@ records what would let it move up, or disappear.
   problem. Keep a `frame*` down to the listing plus the minimum around it, put anything that
   matters pedagogically *outside* the frame as tagged content, and audit how much of the
   course is inside `frame*`: `grep -c 'begin{frame\*}' week*/*.tex`.
+- **Verified:** 2026-09-11, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-FRAMESTAR-TAG/after.tex`
+  with the two hooks deleted and nothing else changed: exit 1 and 2 tagpdf errors, `there is no
+  open structure on the stack` and `The number of automatic begin (4) and end (5) text para hooks
+  differ!`; with the hooks, exit 0 and 0 errors). The fixture cannot carry that as a `naive.tex` —
+  the runner requires every variant to compile, so `before.tex`'s compile is the test. Whether
+  the *fixed* build still leaves poppler's `Mismatched EMC operator` is #11, not this entry.
 - **Revisit when:** ltx-talk's `frame*` stops re-tokenising, or `listings` becomes tag-aware.
 
 ## C-NOBEAMER — all `\usetheme`/`\setbeamer*`/`\usebeamerfont` are undefined
@@ -674,6 +755,9 @@ records what would let it move up, or disappear.
   `--lint`-only stance (see the note under Step 2 in `SKILL.md` — this rewrite is deliberately
   left manual, not automated, precisely because it needs this kind of judgement) should
   first check the group doesn't contain a `\begin{tabular}`/`\begin{align*}`/etc.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-ONSLIDE-ARG/`,
+  pixel probe: overlay 1's prose band is 0.0000 non-white against 0.0387 with `\uncover`, both
+  2 pages and both text layers byte-identical)
 - **Revisit when:** ltx-talk gives `\onslide` a `+m` argument form for Beamer compatibility.
   Track against `\NewDocumentCommand \onslide` in `ltx-talk.cls`.
 
@@ -733,14 +817,21 @@ records what would let it move up, or disappear.
   ```
   Whitespace around `|` is trimmed. ⚠ **Marking only the overlays to drop produces a blank
   frame** — silently worse than doing nothing. This is a per-frame judgement, not a mechanical
-  rewrite: a genuine progressive build often should show every step in the handout. Unlike most
-  of this catalogue, `<handout:N>` works natively under Beamer, so a deck keeping Beamer as an
-  export target needs different source for the two backends.
+  rewrite: a genuine progressive build often should show every step in the handout.
+- **The matched pair is portable, so a deck can keep one source for both backends.** Measured
+  on 0.6.2 / TeX Live 2026: `\only<1| handout:0>` + `\only<2| handout:1>` gives 2 slide pages
+  and a 1-page handout showing the second step under **both** beamer and ltx-talk. What ltx-talk
+  lacks is beamer's frame-level `\begin{frame}<handout:N>`, which it parses and half implements
+  (row 3 above) — that is the form a deck has to be moved off.
 - **Detect:** `convert_deck.py --lint` flags every frame with 2+ `\only<n>{...}` sites and no
   `handout:` qualifier anywhere in the frame. Advisory, not a rewrite: a genuine progressive
   build is a legitimate reason for the finding to be a no-op, so it names candidate frames for
   a human rather than auto-annotating them. It cannot confirm the bug — **build the handout and
   look at it**, since a tag-soundness check on the handout passes regardless.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-HANDOUT-MODE/`,
+  `EXTRA_OUTPUTS="handout"`: the handout of an unqualified `\only` pair extracts as
+  "Step one Step two" on one page, against "Step two" with the matched pair; the slides build of
+  both is the same 2 pages with the same text layer)
 - **Revisit when:** ltx-talk implements frame-level `<handout:N>` selection, not just
   suppression.
 
@@ -792,6 +883,7 @@ records what would let it move up, or disappear.
   pdftotext deck.pdf - | grep -n '[a-z]; [a-z]'
   ```
   `pdfinfo deck.pdf | grep Producer` says which engine actually built a given PDF.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-PDFTEX-MATH/`; measurements below taken on 0.6.0)
 - **Revisit when:** ltx-talk gives the pdfTeX path a maths font with correct ToUnicode maps, or
   drops the pdfTeX fallback. Verified present on 0.6.0.
 
@@ -835,6 +927,7 @@ records what would let it move up, or disappear.
 - ⚠ **`\checkmark` appears in C-PDFTEX-MATH for a different failure** — under pdfTeX it extracts
   as `X`. Same command, two unrelated mechanisms, and each can mask the other: rebuilding with
   LuaLaTeX fixes the extraction and *introduces* the dropped glyph.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-GLYPH-MISSING/`, log + text layer + veraPDF `8.4.5.9-1`)
 - **Revisit when:** ltx-talk gains a font fallback for characters outside the main font.
 
 ## C-SYMBOL-FONT-TOUNICODE — a legacy symbol package's ToUnicode map omits the glyph it uses  ⚠ silent; wrong character in the text layer
@@ -895,9 +988,10 @@ records what would let it move up, or disappear.
   defect is in the font's embedded map. Verified clean above: `amssymb` for maths symbols
   (`$\Box$` → `□`, `$\varnothing$` → `∅`), `pifont` for dingbats. This is a source change, so
   budget for it: a course preamble that loads `wasysym` globally exposes every deck.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-SYMBOL-FONT-TOUNICODE/`, text layer + veraPDF `8.4.5.8-1`)
 - **Revisit when:** LuaTeX emits complete `/ToUnicode` CMaps for builtin-encoded Type 1 fonts.
 
-## C-DISPLAY-DOLLAR — `$$…$$` silently outdents every list item after it  ⚠ silent, ltx-talk only
+## C-DISPLAY-DOLLAR — `$$…$$` silently outdents every list item after it  ⚠ silent; any class under `\DocumentMetadata`
 
 - **Symptom:** in an `itemize`, every `\item` after a `$$…$$` display loses its indentation and
   renders flush with the frame margin, so the list visibly splits in two. Clean compile,
@@ -906,22 +1000,26 @@ records what would let it move up, or disappear.
   making vertical gaps uneven — cosmetic, unlike the outdent.
 - **Scale:** one 20-lecture course had this in **16 of 24 decks across 164 sites** (worst decks
   44, 23, 20, 16). It passed every gate and was found by eye, months after conversion.
-- **Measured** (ltx-talk 0.5.3, TeX Live 2026) — x-position of the item text in points via
-  `pdftotext -bbox`, same three-item list in each class:
+- **Measured** — x-position of the item text in points via `pdftotext -bbox`, same three-item
+  list in each class. Rows 1-3 on ltx-talk 0.5.3, row 4 added 2026-09-11 on 0.6.2:
 
   | class | `$$…$$` | `\[…\]` |
   |---|---|---|
-  | `article` | 158.7 / 158.7 / 158.7 | 158.7 / 158.7 / 158.7 |
-  | `beamer` | 50.2 / 50.2 / 50.2 | 50.2 / 50.2 / 50.2 |
+  | `article`, no `\DocumentMetadata` | 158.7 / 158.7 / 158.7 | 158.7 / 158.7 / 158.7 |
+  | `beamer` (cannot load `\DocumentMetadata` — C-NO-DOCMETA) | 50.2 / 50.2 / 50.2 | 50.2 / 50.2 / 50.2 |
   | **`ltx-talk`** | **50.0 / 28.3 / 28.3** | 50.0 / 50.0 / 50.0 |
+  | **`article`, `\DocumentMetadata{}`** | **158.7 / 133.8 / 133.8** | not measured |
 
-  Items 2 and 3 lose 21.7pt — exactly the `itemize` indent — and land on the frame margin.
-- **Cause: not pinned down.** Presumably ltx-talk applies its list indentation in a way raw
-  `$$` bypasses and `\[…\]` does not. What is established: not the tagging (reproduces under
-  `\DocumentMetadata{tagging=off}`), and not a local preamble (reproduces with the bare class, no packages).
-  ⚠ It is also **not** generic LaTeX `list` behaviour: the `\parshape` explanation is the first
-  thing that comes to mind and survives casual checking, but `article` uses the same `list`
-  machinery and is unaffected. Do not repeat it.
+  The later items lose exactly the `itemize` indent and land on the margin: 21.7pt under
+  ltx-talk, 24.9pt under `article`.
+- **Cause: `\DocumentMetadata`, not the class.** Row 4 is the discriminator — plain `article`
+  is clean until `\DocumentMetadata` is loaded, and then it outdents the same way. beamer is
+  unaffected because it cannot load `\DocumentMetadata` at all. So this is the kernel's
+  paragraph handling meeting raw `$$`, and ltx-talk only carries it in. Consistent with
+  `tagging=off` reproducing: the trigger is `\DocumentMetadata` itself, not tagging.
+  ⚠ **Do not conclude from a clean `article` run that this is ltx-talk-specific** — the run has
+  to load `\DocumentMetadata` to mean anything. Filing it against ltx-talk is a
+  misattribution; see the upstream note below.
 - **Workaround:** spell display math `\[…\]`. `convert_deck.py` rewrites this automatically,
   alternating `\[` and `\]` over the `$$` occurrences in file order, skipping comments and
   verbatim bodies, and refusing to rewrite at all if the total count is odd. Pure LaTeX, so the
@@ -937,8 +1035,14 @@ records what would let it move up, or disappear.
 - **Limitation of any lexical pass:** `$a$$b$` — two adjacent inline maths with no space —
   reads as a `$$` to the converter, the lint and the grep. Rare; the converter reports its pair
   count so it can be eyeballed.
-- **Revisit when:** filed upstream. Best-evidenced item in the catalogue, with a clean MWE;
-  issue #5 puts it first in the filing order. Not reported to ltx-talk as of 2026-08-27.
+- **Verified:** 2026-09-11, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-DISPLAY-DOLLAR/`;
+  cause re-attributed to `\DocumentMetadata` on this date, measurements above otherwise taken on
+  0.5.3/0.6.0)
+- **Upstream:** reported and rejected. `josephwright/ltx-talk#222` was closed `invalid` /
+  `not_planned` on 2026-06-15 — `$$…$$` is not LaTeX syntax — and the `article` reproduction was
+  posted in that thread. Do not refile it there.
+- **Revisit when:** the kernel's paragraph handling changes, or it is taken up by latex-lab. The
+  workaround is unaffected either way: `\[…\]` is correct LaTeX and costs nothing.
 
 ## C-DISPMATH-NEWLINE — `\\` after display math is invalid
 
@@ -1066,6 +1170,8 @@ records what would let it move up, or disappear.
   `\begin{alertblock}<2->{Title}` genuinely needs the overlay, don't reinvent the environment
   signature to swallow `<...>` — wrap the whole box instead:
   `\onslide<2->{\begin{alertblock}{Title}...\end{alertblock}}`.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-ALERTBLOCK/`,
+  text layer: the naive wrapper extracts as `[` and `Key result]`, one page, `Tagged: yes`)
 - **Revisit when:** ltx-talk grows native `alertblock`/`exampleblock` (tracked alongside the
   same issues as C-IMMATURE's block/theorem status).
 
@@ -1158,6 +1264,10 @@ records what would let it move up, or disappear.
 - **Detect before compiling:** `convert_deck.py --lint` reports `C-BACKGROUND` on any
   `\usebackgroundtemplate`, to say the shim must be in the common preamble. It does not
   rewrite the deck, because with the shim there is nothing to rewrite.
+- **Verified:** 2026-09-10, ltx-talk 0.6.2 — still reproduces (`tests/fixtures/C-BACKGROUND/`,
+  pixel probe: page-1 ink 0.0025 stubbed against 1.0000 with the shim, both 3 pages and both
+  `Tagged: yes`; the `artifact` claim re-measured on 0.6.2 at 2 `/S /Figure` without it, 0 with;
+  the themed-rig percentages above were taken on 0.6.0 and not repeated)
 - **Revisit when:** ltx-talk gains a background-image interface of its own; the shim block is
   then deleted and nothing else changes.
 
