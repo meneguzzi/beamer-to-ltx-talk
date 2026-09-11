@@ -16,7 +16,7 @@ Beamer is [incompatible with `\DocumentMetadata`](https://github.com/josephwrigh
 - Native handout mode without per-deck edits
 - Clean `\EditInstance`-based theming instead of `\setbeamer*` commands
 
-ltx-talk is still experimental, and most of its incompatibilities surface only under tagging. This skill encodes the fixes found converting two real courses, of 11 and 20 decks.
+ltx-talk is still experimental, and most of its incompatibilities surface only under tagging. This skill encodes the fixes found converting two real courses, of 12 and 20 decks.
 
 ---
 
@@ -32,9 +32,13 @@ ltx-talk is still experimental, and most of its incompatibilities surface only u
 Check your setup:
 ```sh
 kpsewhich ltx-talk.cls
-pdftex --version
-tlmgr info ltx-talk | grep -E 'cat-version|installed'
+lualatex --version
+grep ProvidesExplClass "$(kpsewhich ltx-talk.cls)"
 ```
+
+⚠ Read the version out of the class file, as above. `tlmgr info ltx-talk` reports its
+`cat-version` from the CTAN catalogue, which lags: it said 0.6.1 while the installed class
+was 0.6.2.
 
 ---
 
@@ -49,10 +53,17 @@ When you give a compatible agent a Beamer `.tex` file and ask to convert it, the
    - Converts braced frame titles to `\frametitle{…}`
    - Rewrites `\center{X}` → `\begin{center}X\end{center}` (a declaration, not a command, fatal under tagging)
    - Strips `\AtBeginSection` outline frames (the preamble's redefined `\section` emits a tagging-safe divider instead, so `\section{X}` lines stay untouched)
-   - Rewrites title pages and verbatim frames
+   - Swaps `\titlepage` for `\maketitle`, so the class's own title page is used and tagged
+     (the preamble restyles it; see **C-TITLEPAGE**)
+   - Rewrites `$$…$$` to `\[…\]`, except inside a `center` environment where `$$` is the only
+     spelling that survives (**C-DISPLAY-DOLLAR**, **C-DISPLAY-IN-CENTER**)
+   - Rewrites verbatim frames
 4. **Lints** with `convert_deck.py --lint` *before* compiling. See below.
 5. **Compiles** and triages errors against the known-incompatibilities catalogue.
-6. **Delivers** a conversion report listing the ltx-talk version targeted, page-count comparison, every compromise made, and outstanding manual follow-ups (especially missing alt text on images and untagged `tikzpicture`/`pgfplots` figures).
+6. **Stamps** the conversion: `scripts/stamp_conversion.py` writes `ltx-talk-conversion.toml`
+   recording the skill version, the ltx-talk version and class date, the TeX Live year, and the
+   `\DocumentMetadata` in force, so a deck says what produced it.
+7. **Delivers** a conversion report listing the ltx-talk version targeted, page-count comparison, every compromise made, and outstanding manual follow-ups (especially missing alt text on images and untagged `tikzpicture`/`pgfplots` figures).
 
 ### Lint before you build
 
@@ -80,6 +91,8 @@ scripts/
                           # which need an alt key set by hand at the call site
   table_audit.py          # Classifies every tabular: data table (needs TH) vs
                           # layout grid (needs table/tagging=div), see A-TABLE-TH
+  stamp_conversion.py     # Writes ltx-talk-conversion.toml: skill and ltx-talk versions,
+                          # TeX Live year, \DocumentMetadata in force
 
 SKILL.md                  # Agent instructions (step-by-step protocol)
 ```
