@@ -255,6 +255,8 @@ nothing. That was claimed and unchecked until it broke decks (#26); it is now en
 | Centring | `\center{X}` | `\begin{center}X\end{center}` | C-CENTER-ARG — a declaration, not a command; fatal under tagging |
 | Verbatim frames | `[…,containsverbatim]{T}` | `\begin{frame*}` + `\frametitle{T}` | |
 | Title frame | `\maketitle` + trailing centred text | *(kept as-is)* | the construct compiles verbatim; **manual**, and small — split a folded `\title`, re-tune the `\vspace` — C-TITLEPAGE |
+| Title frame | `\titlepage` | `\maketitle` | ltx-talk has no `\titlepage` at all: undefined, no title page. Rewritten automatically unless wrapped in `\frame{…}` — C-TITLE-CMDS |
+| Title extras | `\titlegraphic` / `\logo` / `\inst` / `\thanks` | *(none)* | no equivalent exists; **warns**. The first three error out, `\thanks` loses its text silently — C-TITLE-CMDS |
 
 The script **never edits commented-out lines** and preserves indentation. It prints a
 summary of every change and every warning. Things it deliberately leaves for you to do by
@@ -293,6 +295,12 @@ grep -nE '^\s*\\begin\{frame\}(<[^>]*>)?(\[[^]]*\])?\{' deck.tex     # must retu
      into XMP `dc:creator`, emails and all. Fix it there, *not* by moving the emails out of
      `\author` — that would make the deck stop matching its Beamer source to solve a problem the
      preamble already solves.
+
+  ⚠ All of that assumes the deck says `\maketitle`. If it says **`\titlepage`** — the more usual
+  Beamer spelling — ltx-talk has no such command and there is no title page at all; the script
+  rewrites it, except inside a `\frame{…}` short form, which is not an ltx-talk frame either.
+  `\titlegraphic`, `\logo` and `\inst` have no equivalent and error out; `\thanks` loses its
+  text in silence. See **C-TITLE-CMDS**.
 
   Also keep `\date{}`: `\@date` defaults to `\today`, so a deck with no `\date` prints the date
   of the build. `--lint` reports a `\maketitle` with no `\date` and one with no `\title`.

@@ -394,6 +394,41 @@ def convert_line(line: str, old_pre: str, new_pre: str) -> str:
 #: (compromise-id, compiled regex, message) — pure source greps, no build needed.
 #: Each entry is a failure the LaTeX compiler will NOT report.
 LINTS = [
+    ('C-TITLE-CMDS',
+     re.compile(r'\\titlepage\b'),
+     r'\titlepage does not exist in ltx-talk: "! Undefined control sequence", and the '
+     r"title page is simply absent. It is beamer's most common title idiom "
+     r'(\begin{frame}\titlepage\end{frame} or \frame{\titlepage}), so a deck written by '
+     r'anyone else is likely to use it. Replace it with \maketitle -- the class builds the '
+     r'same page from \title/\subtitle/\author/\institute/\date. convert_deck.py rewrites '
+     r'a bare \titlepage automatically; a \frame{...} wrapper around it has to become '
+     r'\begin{frame}...\end{frame} by hand (see below).'),
+    ('C-TITLE-CMDS',
+     re.compile(r'^\s*\\frame\s*\{'),
+     r"beamer's \frame{...} short form is not an ltx-talk frame: it falls through to "
+     r'something else entirely and gives "! Missing number, treated as zero" (2 errors on '
+     r'a one-line MWE). Use \begin{frame} ... \end{frame}.'),
+    ('C-TITLE-CMDS',
+     re.compile(r'\\titlegraphic\b'),
+     r'\titlegraphic does not exist in ltx-talk (20 errors on an MWE). The titlepage '
+     r'template has five fixed elements -- title, subtitle, author, institute, date -- and '
+     r'no slot for an image and no way to declare one. Put the graphic in the frame '
+     r'AROUND \maketitle, the same place the attribution goes.'),
+    ('C-TITLE-CMDS',
+     re.compile(r'\\logo\b'),
+     r'\logo does not exist in ltx-talk (20 errors on an MWE). There is no per-frame logo '
+     r'slot; the header/footer instances are the only furniture. Either drop it or put the '
+     r'image into the header instance.'),
+    ('C-TITLE-CMDS',
+     re.compile(r'\\inst\b'),
+     r'\inst does not exist in ltx-talk: 4 errors, AND the marker renders as a bare digit '
+     r'on the line ("A. Lecturer1"), so the affiliation numbering is wrong even where it '
+     r'compiles. Write the affiliations out, or fold them into \institute as plain text.'),
+    ('C-TITLE-CMDS',
+     re.compile(r'\\thanks\b'),
+     r'\thanks SILENTLY LOSES ITS TEXT on an ltx-talk title page: 0 errors, the footnote '
+     r'MARK renders ("A. Lecturer1") and the note itself is never typeset -- there is no '
+     r'footnote machinery in the titlepage template. Move the text somewhere visible.'),
     ('C-FRAMETITLE',
      re.compile(r'^\s*\\begin\{frame\}(?:<[^>]*>)?(?:\[[^\]]*\])?\{'),
      'braced frame title left unconverted — this renders as BODY TEXT with no error and '
@@ -599,6 +634,31 @@ def handout_mode_findings(text: str):
     return hits
 
 
+def rewrite_titlepage(text: str) -> str:
+    r"""C-TITLE-CMDS: \titlepage -> \maketitle.
+
+    \titlepage is beamer's usual title idiom and ltx-talk has no such command at all --
+    "! Undefined control sequence", and no title page in the output. \maketitle builds
+    the same page from the same metadata, so the swap is one-for-one.
+
+    Only a \titlepage that stands on its own is rewritten. A \frame{\titlepage} wrapper
+    is left alone and reported instead: beamer's \frame{...} short form is not an
+    ltx-talk frame either, so that line needs \begin{frame}...\end{frame} and a human
+    deciding what else belongs in it.
+    """
+    def swap(m):
+        NOTE.append('\\titlepage -> \\maketitle')
+        return m.group(0).replace('\\titlepage', '\\maketitle')
+
+    out = []
+    for line in text.split('\n'):
+        if is_comment(line) or '\\titlepage' not in line or re.search(r'\\frame\s*\{', line):
+            out.append(line)
+            continue
+        out.append(re.sub(r'\\titlepage\b', swap, line, count=1))
+    return '\n'.join(out)
+
+
 def titlepage_findings(text: str):
     r"""Whole-file checks around the native ltx-talk title page (C-TITLEPAGE).
 
@@ -670,12 +730,14 @@ def titlepage_findings(text: str):
     if folded:
         lineno, src = folded
         hits.append((lineno, 'C-TITLEPAGE',
-                     r'\title holds a folded subtitle after a \\. Under the shared '
-                     r'preamble the title is the document H1, and the \\ makes the '
-                     r'subtitle a SECOND H1 (measured: /S /H1 = 2, against 1 when '
-                     r'split). Split it into \title{Main} and \subtitle{Subtitle} -- '
-                     r'\subtitle is a beamer command too, so the deck still compiles '
-                     r'as beamer.',
+                     r'\\ inside \title. Under the shared preamble the title is the '
+                     r'document H1, and ANY \\ there splits it into TWO H1 elements '
+                     r'(measured: /S /H1 = 2, against 1 without). If the second part is '
+                     r'a subtitle -- the common beamer fold \title{Main\\\large{Sub}} -- '
+                     r'move it to \subtitle{Sub}, which beamer has too. If it is a real '
+                     r'line break in one title, drop it and let the title wrap, or use '
+                     r'\mbox{} to bind the words: a heading is one paragraph, and \\ '
+                     r'here does not mean what it means in body text.',
                      src))
 
     return hits
@@ -764,6 +826,7 @@ def main():
     text = fix_center_arg(text)
     text = rewrite_display_dollar(text)   # C-DISPLAY-DOLLAR
     text = rewrite_frame_options(text)    # C-FRAME-OPT
+    text = rewrite_titlepage(text)        # C-TITLE-CMDS
 
     out_lines = [convert_line(ln + '\n', args.old_preamble, args.new_preamble)
                  for ln in text.split('\n')]

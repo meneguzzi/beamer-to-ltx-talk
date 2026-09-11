@@ -37,10 +37,10 @@ for d in tests/fixtures/*/; do
 done
 ```
 
-As of 2026-09-11 that is 13 self-verifying and 1 compile-only, out of 14 fixtures, against 43
+As of 2026-09-11 that is 13 self-verifying and 1 compile-only, out of 14 fixtures, against 44
 entries in this file. The figure recorded here before #7 was 8 and 6, which had already gone
 stale — run the loop, do not trust the sentence. An entry with no fixture at all has nothing
-checking it — **#40** tracks the 29 in that state.
+checking it — **#40** tracks the 30 in that state.
 
 `C-TITLEPAGE` was compile-only for the same reason until **#7**: its original defect was
 retired, and a `naive.tex` asserting a defect that no longer exists would report `ADVISORY` on
@@ -356,6 +356,10 @@ records what would let it move up, or disappear.
 - **So the advice is to change almost nothing.** The measure of a good conversion here is how
   close the deck stays to its Beamer source: a converted course should be able to go *back* to
   Beamer by swapping the preamble `\input`, and the title block should not be in the way.
+- ⚠ **This entry covers one Beamer idiom, not all of them.** Everything below assumes the deck
+  says `\maketitle`. A deck that says `\titlepage` — which is the more usual Beamer spelling,
+  and which neither course this skill was built on happens to use — gets no title page at all,
+  along with `\titlegraphic`, `\logo`, `\inst` and `\thanks`. See **C-TITLE-CMDS**.
 
 ### What the Beamer source actually writes
 
@@ -519,6 +523,41 @@ with `.tl_gset:c`), so `\ifx` alone takes the right branch and the guard is belt
 emitted an empty footer title in silence. The guard stays because it costs nothing and the
 failure it prevents is invisible. `\makeatletter` is required because the shared preamble is
 `\input`, not a package.
+
+## C-TITLE-CMDS — the Beamer title vocabulary ltx-talk does not have  ⚠ five loud, one silent
+
+- **Verified:** 2026-09-11, ltx-talk 0.6.2 — still reproduces (each measured on its own MWE)
+- **Why this entry exists separately from C-TITLEPAGE.** C-TITLEPAGE says a converted deck can
+  keep its Beamer title block almost verbatim. That is true of *one* Beamer idiom — `\maketitle`
+  plus a trailing block, which is what the two courses this skill was built on happen to use.
+  It is **not** true of Beamer's title vocabulary in general. A deck written by anyone else is
+  quite likely to use `\titlepage`, and nothing in the title block survives that.
+- **Symptom and cause, per command:**
+
+  | Beamer | under ltx-talk 0.6.2 | what to write instead |
+  |---|---|---|
+  | `\titlepage` | `! Undefined control sequence`, **1 error**, no title page at all | `\maketitle` — the class builds the same page from the same metadata |
+  | `\frame{…}` | `! Missing number, treated as zero`, **2 errors** — the short form is not an ltx-talk frame | `\begin{frame} … \end{frame}` |
+  | `\titlegraphic{…}` | undefined, **20 errors** | no title-page image slot exists; put the graphic in the frame *around* `\maketitle` |
+  | `\logo{…}` | undefined, **20 errors** | no per-frame logo slot; drop it, or put the image in the `header` instance |
+  | `\inst{…}` | undefined, **4 errors** — *and* the marker still renders as a bare digit, `A. Lecturer1`, so the affiliation numbering is wrong even where it compiles | write the affiliations out, or fold them into `\institute` as plain text |
+  | `\thanks{…}` | ⚠ **0 errors and the text is silently lost.** The footnote *mark* renders (`A. Lecturer1`); the note itself is never typeset, because the `titlepage` template has no footnote machinery | move the text somewhere visible |
+
+  `\titlepage` is the one that matters most: `\begin{frame}\titlepage\end{frame}` and
+  `\frame{\titlepage}` are the ordinary way Beamer decks make a title page, and a deck using
+  either gets no title page at all.
+- **Workaround:** `convert_deck.py` rewrites a standalone `\titlepage` → `\maketitle`
+  automatically. It deliberately does **not** touch `\frame{\titlepage}`: that line needs the
+  `\frame{…}` short form expanded as well, and what else belongs inside the resulting frame is a
+  judgement call. Everything else in the table is reported, not rewritten — each needs a design
+  decision (where does the logo go?) rather than a substitution.
+- **Detect before compiling:** `convert_deck.py` reports all six (`C-TITLE-CMDS`) during both
+  `--lint` and conversion. Measured: 8 findings on a synthetic deck using all of them, and
+  **0 across both real course corpora**, which use none — the reason this gap was invisible
+  until it was looked for.
+- **Revisit when:** ltx-talk grows a title-page graphic slot, a logo mechanism, or `\titlepage`
+  as an alias. Worth raising upstream as part of **#5** — `\titlepage` in particular is a
+  one-line compatibility alias.
 
 ## C-NO-DOCMETA — a deck that never sets `\DocumentMetadata` half-loads ltx-talk  ⚠ cascade of "undefined"
 
