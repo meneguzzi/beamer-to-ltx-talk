@@ -94,6 +94,15 @@ dictionary is gone), `log_count`, and the pixel helpers below. Each
 failure message names the value observed, so a CI log says what was measured rather than only
 that something failed.
 
+⚠ **A helper may only use tools the CI container installs.** The `latex-fixtures` job runs in
+`texlive/texlive:latest` plus exactly `poppler-utils` and `qpdf` — so `qpdf`, `pdfinfo`,
+`pdftotext`, `pdftoppm`, and coreutils. Nothing else is there. In particular **`strings` is not**
+(it is binutils), and a helper that used it read the PDF metadata as the empty string in CI while
+passing locally, which surfaced as `XMP dc:title is ''` — a message that reads like a real
+metadata finding rather than a missing command. Grep the `qpdf --qdf` output with `grep -a`
+instead; that is what every other helper here does. If a new helper genuinely needs a new tool,
+add it to the `Install poppler-utils and qpdf` step in the same commit.
+
 ### PDF/UA-2 clauses (veraPDF)
 
 Two font-level entries have no cheap signal — `C-SYMBOL-FONT-TOUNICODE` compiles clean, is

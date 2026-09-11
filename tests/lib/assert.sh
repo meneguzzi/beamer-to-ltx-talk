@@ -208,20 +208,48 @@ must_have_struct_count() {
 # C-TITLEPAGE is exactly about those two drifting apart, so the fixture needs to
 # see the metadata and not only the text layer. pdfinfo does not show it on a
 # PDF 2.0 file -- the Info dictionary is gone and the title lives in the XMP.
+# ⚠ grep -a on the qdf file, NOT `strings`. Every other helper here does the
+# same, and for a reason: `strings` is binutils, which the texlive/texlive CI
+# container does not ship. An earlier version of this helper used it, returned
+# the empty string when the command was missing, and CI reported
+# "XMP dc:title is ''" -- indistinguishable from a real metadata failure. Do not
+# reintroduce a dependency the container lacks.
 dc_title() {
   local q t; q=$(mktemp)
   if ! qpdf --qdf --object-streams=disable "$PDF" "$q" 2>/dev/null; then
     rm -f "$q"; echo ""; return
   fi
-  t=$(strings "$q" | grep -A3 '<dc:title>' \
+  t=$(grep -a -A3 '<dc:title>' "$q" \
       | sed -n 's/.*<rdf:li[^>]*xml:lang="x-default"[^>]*>\(.*\)<\/rdf:li>.*/\1/p' | head -1)
   rm -f "$q"
   echo "$t"
 }
 
+# has_xmp -- is there an XMP metadata packet at all? Used to tell a PDF that
+# genuinely carries no title from a toolchain that cannot see one.
+has_xmp() {
+  local q n; q=$(mktemp)
+  if ! qpdf --qdf --object-streams=disable "$PDF" "$q" 2>/dev/null; then
+    rm -f "$q"; echo 0; return
+  fi
+  n=$(grep -ac 'xmpmeta\|<rdf:RDF' "$q" 2>/dev/null | head -1)
+  rm -f "$q"
+  echo "${n:-0}"
+}
+
 # must_have_dc_title "expected" -- exact match on the XMP document title.
+#
+# Distinguishes "the PDF has no XMP at all" from "the title differs": an empty
+# result with no XMP packet means the check could not be made, and saying so is
+# not the same as reporting an empty title. That distinction is the whole point
+# -- an empty dc:title IS a real finding (C-TITLEPAGE: \maketitle with no
+# \title emits no dc:title element), so it must not be confused with a broken
+# read.
 must_have_dc_title() {
   local want="$1" got; got=$(dc_title)
+  if [ -z "$got" ] && [ "$(has_xmp)" = "0" ]; then
+    fail "could not read XMP from $PDF at all (no metadata packet found) -- this is a toolchain or build problem, not a dc:title finding; expected '$want'"
+  fi
   [ "$got" = "$want" ] || fail "XMP dc:title is '$got', expected '$want'"
   note "XMP dc:title = '$got'"
 }
