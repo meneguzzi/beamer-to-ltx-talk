@@ -37,14 +37,15 @@ for d in tests/fixtures/*/; do
 done
 ```
 
-As of 2026-09-10 that is 8 self-verifying and 6 compile-only, out of 14 fixtures, against 43
-entries in this file. An entry with no fixture at all has nothing checking it — **#40** tracks
-the 29 in that state.
+As of 2026-09-11 that is 13 self-verifying and 1 compile-only, out of 14 fixtures, against 44
+entries in this file. The figure recorded here before #7 was 8 and 6, which had already gone
+stale — run the loop, do not trust the sentence. An entry with no fixture at all has nothing
+checking it — **#40** tracks the 30 in that state.
 
-One fixture is compile-only **on purpose**: `C-TITLEPAGE` is retired, and a `naive.tex`
-asserting a defect that no longer exists would report `ADVISORY` on every run for ever. The
-cost is that a retired entry has no self-maintaining check, so nothing notices if its defect
-comes back.
+`C-TITLEPAGE` was compile-only for the same reason until **#7**: its original defect was
+retired, and a `naive.tex` asserting a defect that no longer exists would report `ADVISORY` on
+every run for ever. It is now self-verifying again, because the entry is about something else
+— the entry moved, so the assertion could.
 
 `Verified:` lines have a fixed shape so they can be read by a script as well as by a person —
 `#12` (upgrade an already-converted deck) needs exactly this:
@@ -342,38 +343,221 @@ records what would let it move up, or disappear.
   (C-FRAMETITLE) and the conflict disappears.
 - **Revisit when:** n/a.
 
-## C-TITLEPAGE — the overlap is FIXED; only a styling preference remains  ✅ retired
+## C-TITLEPAGE — use the class's own `\maketitle`, and keep the Beamer title block  ✅ the overlap is retired
 
-- **Verified:** 2026-09-10, ltx-talk 0.6.2 — no longer reproduces (measured, four variants; see
-  below)
-- **The original symptom is gone.** It was: the "Material adapted from …" block that Beamer
-  decks put after `\maketitle` printed **on top of** the title, because ltx-talk's `\maketitle`
-  produced a full, vertically-centred frame. Reported against 0.5.0; the fixture already
-  recorded it not reproducing on 0.5.3, and it does not reproduce on 0.6.2 either.
-- **Measured 2026-09-10** (`pdftotext -bbox`, `yMin` in points, page height 283.465), plain
-  `\maketitle` plus trailing content in one frame:
+- **Verified:** 2026-09-11, ltx-talk 0.6.2 — no longer reproduces (the Beamer title construct
+  builds verbatim; measured, four variants, see below)
+- **The original symptom is gone.** C-TITLEPAGE was filed against 0.5.0 as an *overlap*: the
+  "Material adapted from …" block that Beamer decks put after `\maketitle` printed **on top of**
+  the title, because ltx-talk's `\maketitle` produced a full, vertically-centred frame. It does
+  not reproduce on 0.5.3 (2026-08-24) or 0.6.2 (2026-09-11), against a one-line attribution, a
+  long multi-line block, a no-`\vfill` variant and `\maketitle` outside any frame — up to 61pt
+  of clear space in the minimal case.
+- **So the advice is to change almost nothing.** The measure of a good conversion here is how
+  close the deck stays to its Beamer source: a converted course should be able to go *back* to
+  Beamer by swapping the preamble `\input`, and the title block should not be in the way.
+- ⚠ **This entry covers one Beamer idiom, not all of them.** Everything below assumes the deck
+  says `\maketitle`. A deck that says `\titlepage` — which is the more usual Beamer spelling,
+  and which neither course this skill was built on happens to use — gets no title page at all,
+  along with `\titlegraphic`, `\logo`, `\inst` and `\thanks`. See **C-TITLE-CMDS**.
 
-  | variant | title `yMin`–`yMax` | attribution `yMin` | overlap |
-  |---|---|---|---|
-  | `\maketitle` + `\vfill` + attribution | 98.99–119.97 | 180.64 | none, 61pt clear |
-  | same, long multi-line attribution block | 92.21–113.20 | 173.86 | none |
-  | same, no `\vfill` at all | 98.99–119.97 | 180.64 | none |
-  | `\maketitle` outside any frame | 105.63–126.61 | n/a, own page | none |
+### What the Beamer source actually writes
 
-  The fixture's own hypothesis — that the trigger needs more than a minimal frame — does not
-  hold up: a realistic attribution block behaves the same as a one-liner.
-- **What is left is a preference, not a defect.** The stock title is plainly styled, so
-  `\coursetitlepage{title}{subtitle}{attribution}` in `assets/preamble-template.tex` still buys
-  a designed layout with an attribution slot. That is a reason to keep using it, not a
-  workaround for a bug. Either form is correct; keep `\title`/`\author` as metadata for the
-  footer and PDF info regardless.
-- ⚠ **Do not read this entry as a reason to hand-roll a title frame.** A deck already carrying
-  `\coursetitlepage` is fine and needs no change. A *new* conversion can use plain
-  `\maketitle`. **#7** owns the follow-through — restyling ltx-talk's native `\maketitle` so
-  there is one source of truth and a tagged title — and is the right place for that decision.
-- ⚠ **This retirement is a point-in-time measurement, not a self-maintaining one.** The fixture
-  has no `naive.tex`, because a variant asserting a defect that no longer exists would report
-  `ADVISORY` on every run for ever. Nothing will tell us if the overlap comes back.
+```latex
+\author[Meneguzzi and Sripada]{Felipe Meneguzzi \and Yaji Sripada\\
+  \texttt{a@uni.ac.uk}\and \texttt{b@uni.ac.uk}}
+\institute[Aberdeen]{University of Aberdeen}
+\title[Short]{Main Title\\\large{Course - Lecture 5}}
+\date{}
+...
+\begin{frame}
+	\maketitle
+	\vspace{-4em}
+	\begin{center}
+		Material adapted from: \\
+		Russell and Norvig (AIMA Book): Chapters 7 and 9
+	\end{center}
+\end{frame}
+```
+
+Measured across one real course: **16 of 16 decks** in this exact shape — `\date{}` empty in
+all 16, the attribution as trailing centred text in all 16, `\subtitle` used in none.
+
+**All of it compiles verbatim under ltx-talk 0.6.2** — 0 errors, `Tagged: yes`, title, author,
+emails, institute and attribution all in the right order and nothing overlapping. Including the
+two things that look risky: `\and` works because the `titlepage` template rebinds it
+(`\cs_set_protected:Npn \and { \quad }`, `ltx-talk.cls:2584` — this is what makes C-AND-TITLE a
+non-issue on the native title page), and `\\` is an ordinary line break inside an element.
+
+### Three things a conversion does change, and nothing else
+
+1. ⚠ **Split the folded subtitle out of `\title`.** `\title{Main\\\large{Sub}}` under the
+   preamble's H1 override makes the subtitle a **second `H1`** — measured on 0.6.2:
+   `/S /H1` = **2**, against 1 when split. It also corrupts the metadata title: `dc:title`
+   comes out as `Main TitleCourse - Lecture 5`, the `\\` dropped and the two run together.
+   `\subtitle` is a Beamer command too, so the split costs nothing and the deck still compiles
+   as Beamer either way. `convert_deck.py` reports an unsplit one (`C-TITLEPAGE`).
+   ```latex
+   \title[Short]{Main Title}
+   \subtitle{Course - Lecture 5}
+   ```
+2. ⚠ **Re-tune the `\vspace` above the attribution.** Beamer's `-4em` was compensating for
+   Beamer's own title spacing; under ltx-talk it pulls the attribution up until it nearly
+   touches the institute line (measured: institute `yMax` 173.45, attribution `yMin` 172.61).
+   `-1em` gives the same look as the original — a number, not a construct.
+3. ⚠ **Set `pdfauthor=` once, in the shared preamble.** ltx-talk copies `\author`'s argument
+   into the document metadata (`\g__tag_title_author_tl` → XMP `dc:creator`), so the emails the
+   Beamer source keeps inside `\author` land in `dc:creator` too — measured on 0.6.2,
+   `dc:creator` reads `A. Lecturer  a.l@uni.ac.uk` (font switches dropped, text kept).
+   `\hypersetup{pdfauthor={…}}` wins, and fixes every deck at once **without editing a single
+   `\author` line**, which is the point: moving the emails into `\institute` also fixes it, and
+   is the wrong trade — it makes the deck stop matching its Beamer source to solve a problem
+   the preamble can solve on its own. `assets/preamble-template.tex` ships the `pdfauthor=`.
+
+### Why `\maketitle` and not a hand-rolled title frame
+
+Earlier revisions of this skill recommended abandoning `\maketitle` for a hand-rolled
+`\coursetitlepage{title}{subtitle}{attribution}` frame. **That advice is withdrawn** — it was
+working around the overlap above, which does not exist, and it cost:
+
+1. **One source of truth.** Without `\maketitle` the *long* argument of `\title` is never
+   rendered anywhere. It silently duplicates the custom frame's arguments and drifts from them;
+   only `\title[short]` stays live, consumed by the footer. On one real course this had already
+   produced a deck whose `\title` disagreed with its title page, and **a deck with no `\title`
+   at all**, whose footer was blank on all 46 pages with nothing to catch it.
+2. **A title that is not a heading.** A hand-rolled frame emits no structure for the title, so
+   A-HEADINGS had to hand-write the `H1` back. The native path gets it from the `title`
+   element's `tag-begin` instead. ⚠ Do **not** read this as "the native path tags the title and
+   the hand-rolled one does not" — both can produce the `H1`, and the hand-rolled one did. What
+   the native path removes is the *drift*, item 1.
+3. **A deck that no longer looks like its Beamer source**, which is the cost that matters most
+   for a course that may want to go back.
+
+`tests/fixtures/C-TITLEPAGE/` is this pair: `after.tex` differs from the Beamer `before.tex` in
+exactly the two ways listed above, and `naive.tex` is the hand-rolled frame, which measures
+`/S /H1` = 0 and a `dc:title` that has already drifted.
+
+### The restyle, in the shared preamble
+
+The five keys each element takes are `color`, `font`, `before-skip`, `after-skip`, `tag-begin`,
+`tag-end`. Element order and alignment come from the `titlepage` template itself.
+
+```latex
+\EditInstance{titlepage-element}{title}
+  { color = themeaccent , font = \Huge\bfseries , before-skip = 0pt , after-skip = 0.5em ,
+    tag-begin = {\tagpdfsetup{para/tag=H1,para/flattened}} , tag-end = {} }   % A-HEADINGS
+\EditInstance{titlepage-element}{subtitle}
+  { color = black , font = \Large , before-skip = 0pt , after-skip = 2.5em }
+\EditInstance{titlepage-element}{author}
+  { font = \large , before-skip = 0pt , after-skip = 0.4em }
+\EditInstance{titlepage-element}{institute}
+  { font = \normalsize , before-skip = 0pt , after-skip = 2.5em }
+\EditInstance{titlepage-element}{date}
+  { font = \small , before-skip = 0pt , after-skip = 0pt }
+```
+
+⚠ **The stock subtitle is the blue `structure` colour**, so `color = black` has to be explicit
+to match a typical Beamer title page.
+
+⚠ **`\date` is not empty by default.** `\@date` defaults to `\today`, so a deck that sets no
+`\date` at all prints **the date of the build**, changing on every rebuild. Beamer does this
+too, and the Beamer decks accordingly write `\date{}` — keep it. `convert_deck.py` warns
+(`C-TITLEPAGE`) on a `\maketitle` with no `\date`, and on one with no `\title`, which gives a
+title page with no title, **no XMP `dc:title` element at all** (measured: absent, not merely
+empty, so veraPDF ua2 clause 8.11.1 fails — see C-NO-UA2) and a blank footer title on every
+page.
+
+### The alternative: the attribution in `\date`
+
+A deck that wants everything inside the title block proper can put the attribution in
+`\date{…}` and let the restyled `date` element place it. The output is correct, and one real
+course shipped 12 decks this way. It is a documented alternative, not the default, because:
+
+- it misuses a semantic field on output whose whole purpose is accessibility;
+- the `date` element carries no tag role that suits attribution text;
+- `\@shortdate` is `\let` from `\@date` at class load (`ltx-talk.cls:2467`), so anything later
+  wanting a genuine short date gets the attribution — measured: `\date{Adapted from R\&N.}`
+  leaves `\@shortdate` as `macro:->Adapted from R\&N.`;
+- a deck that legitimately wants **both** a date and an attribution cannot express it;
+- and the title block stops matching the Beamer source, so switching back needs a hand edit.
+
+ltx-talk offers exactly five `titlepage-element` instances and no way to declare a sixth (its
+`element-order` can only order those, because each is fetched as `\@<name>`), so there is no
+correct home for an attribution *inside* the title block. That is the real constraint — and the
+reason the default is to leave the attribution outside it, where Beamer already had it.
+**Revisit when** ltx-talk gains a user-declarable `titlepage-element` or a dedicated attribution
+slot; worth raising upstream as part of **#5**.
+
+### The `\coursetitlepage` shim
+
+Decks already converted with the hand-rolled frame keep working with no edit: the template
+redefines `\coursetitlepage` to route onto the native title page, so they stop being able to
+drift — `\title`, the footer and the printed title page all come from its first argument — and a
+deck that never called `\title` at all gets its footer title back as a side effect. Its third
+argument goes to `\date`, i.e. the alternative form above.
+
+```latex
+\makeatletter
+\newcommand{\coursetitlepage}[3]{%
+  \@ifundefined{@shorttitle}
+    {\title{#1}}
+    {\ifx\@shorttitle\@empty
+       \title{#1}%
+     \else
+       \let\course@footername\@shorttitle
+       \expandafter\title\expandafter[\course@footername]{#1}%
+     \fi}%
+  \subtitle{#2}\date{#3}\maketitle
+}
+\makeatother
+```
+
+Measured on 0.6.2, three title states: `\title[CSP]{Long}` keeps `CSP` in the footer;
+`\title{Long}` keeps `Long`; **no `\title` at all** now puts the title page's own title in the
+footer, which repairs the blank-footer case for free.
+
+⚠ **The `\@ifundefined` guard is version-dependent.** On 0.6.2 `\@shorttitle` is
+*defined-and-empty* from class load (the `\clist_map_inline` over the metadata keys declares it
+with `.tl_gset:c`), so `\ifx` alone takes the right branch and the guard is belt and braces. On
+0.5.x it was genuinely **undefined**, and `\ifx\@shorttitle\@empty` took the wrong branch and
+emitted an empty footer title in silence. The guard stays because it costs nothing and the
+failure it prevents is invisible. `\makeatletter` is required because the shared preamble is
+`\input`, not a package.
+
+## C-TITLE-CMDS — the Beamer title vocabulary ltx-talk does not have  ⚠ five loud, one silent
+
+- **Verified:** 2026-09-11, ltx-talk 0.6.2 — still reproduces (each measured on its own MWE)
+- **Why this entry exists separately from C-TITLEPAGE.** C-TITLEPAGE says a converted deck can
+  keep its Beamer title block almost verbatim. That is true of *one* Beamer idiom — `\maketitle`
+  plus a trailing block, which is what the two courses this skill was built on happen to use.
+  It is **not** true of Beamer's title vocabulary in general. A deck written by anyone else is
+  quite likely to use `\titlepage`, and nothing in the title block survives that.
+- **Symptom and cause, per command:**
+
+  | Beamer | under ltx-talk 0.6.2 | what to write instead |
+  |---|---|---|
+  | `\titlepage` | `! Undefined control sequence`, **1 error**, no title page at all | `\maketitle` — the class builds the same page from the same metadata |
+  | `\frame{…}` | `! Missing number, treated as zero`, **2 errors** — the short form is not an ltx-talk frame | `\begin{frame} … \end{frame}` |
+  | `\titlegraphic{…}` | undefined, **20 errors** | no title-page image slot exists; put the graphic in the frame *around* `\maketitle` |
+  | `\logo{…}` | undefined, **20 errors** | no per-frame logo slot; drop it, or put the image in the `header` instance |
+  | `\inst{…}` | undefined, **4 errors** — *and* the marker still renders as a bare digit, `A. Lecturer1`, so the affiliation numbering is wrong even where it compiles | write the affiliations out, or fold them into `\institute` as plain text |
+  | `\thanks{…}` | ⚠ **0 errors and the text is silently lost.** The footnote *mark* renders (`A. Lecturer1`); the note itself is never typeset, because the `titlepage` template has no footnote machinery | move the text somewhere visible |
+
+  `\titlepage` is the one that matters most: `\begin{frame}\titlepage\end{frame}` and
+  `\frame{\titlepage}` are the ordinary way Beamer decks make a title page, and a deck using
+  either gets no title page at all.
+- **Workaround:** `convert_deck.py` rewrites a standalone `\titlepage` → `\maketitle`
+  automatically. It deliberately does **not** touch `\frame{\titlepage}`: that line needs the
+  `\frame{…}` short form expanded as well, and what else belongs inside the resulting frame is a
+  judgement call. Everything else in the table is reported, not rewritten — each needs a design
+  decision (where does the logo go?) rather than a substitution.
+- **Detect before compiling:** `convert_deck.py` reports all six (`C-TITLE-CMDS`) during both
+  `--lint` and conversion. Measured: 8 findings on a synthetic deck using all of them, and
+  **0 across both real course corpora**, which use none — the reason this gap was invisible
+  until it was looked for.
+- **Revisit when:** ltx-talk grows a title-page graphic slot, a logo mechanism, or `\titlepage`
+  as an alias. Worth raising upstream as part of **#5** — `\titlepage` in particular is a
+  one-line compatibility alias.
 
 ## C-NO-DOCMETA — a deck that never sets `\DocumentMetadata` half-loads ltx-talk  ⚠ cascade of "undefined"
 
@@ -416,8 +600,11 @@ records what would let it move up, or disappear.
   | `{a-4,ua-2}` | `part=2, rev=2024` | 8.11.1 only |
 
   The residual 8.11.1 is `dc:title` — the MWE has no `\title`. Adding `\title{T}` gives a clean
-  `PASS`, and `\title` alone is enough: it does **not** need `\maketitle`, so a deck using the
-  hand-rolled **C-TITLEPAGE** frame still satisfies it as long as `\title` is kept.
+  `PASS`, and `\title` alone is enough: it does **not** need `\maketitle`, so a deck still
+  carrying the old hand-rolled **C-TITLEPAGE** frame satisfies it as long as `\title` is kept.
+  ⚠ The converse is the trap: on the native path a `\maketitle` with **no** `\title` emits no
+  `dc:title` element at all (measured on 0.6.2 — absent, not empty), which fails this clause.
+  `convert_deck.py` warns.
 - **Detect before compiling:** `convert_deck.py` warns (`C-NO-UA2`) during both `--lint` and
   conversion when a literal `\DocumentMetadata` in *this file* sets `pdfstandard=` without
   `ua-2`. ⚠ It cannot follow `\input`, so the common layout — metadata in a shared
@@ -509,7 +696,14 @@ records what would let it move up, or disappear.
   }
   ```
   Verified: same deck, same everything else — 101 errors → **0 errors, page count identical,
-  `Tagged: yes`**. `assets/preamble-template.tex` now does this.
+  `Tagged: yes`**.
+- ✅ **The shared preamble no longer needs this**, because it no longer hand-rolls the title
+  frame. ltx-talk's own `titlepage` template does `\cs_set_protected:Npn \and { \quad }` around
+  its elements (`ltx-talk.cls:2584`), so `\author{A \and B}` typesets correctly on the native
+  title page with no local rebinding — verified on 0.6.2, 0 errors. See **C-TITLEPAGE**. The
+  entry stays live because the hazard is not about title pages: **any** frame that typesets
+  `\AuthorLong`, or any other `\and`-bearing token list, in running text detonates the same way,
+  and a deck still carrying a hand-rolled title frame still needs the rebinding above.
 - **Also:** the stock template avoids `\\` as a line break in that frame (`\par` + `\vspace`
   instead). `\\` is not what breaks here, but `\par`/`\vspace` is the tagging-safe idiom for
   stacking centred lines.
@@ -1302,12 +1496,35 @@ records what would let it move up, or disappear.
   Meanwhile `\section` is `H1`. So the heading tree of a typical deck runs `H4, H1, H4, H4,
   …`: the document opens on an H4 with no H1 above it, and H1→H4 skips two levels. Nothing
   on a title page is a heading at all — `\title` maps to `/Title`, roled to `P`.
-- **Workaround:** two changes, both in the shared preamble:
+- **Workaround:** `\tagpdfsetup{role/new-tag = frametitle / H2}` in the shared preamble, so
+  the frame title sits directly under the section `H1`.
+
+  and make the deck title the document's `H1`. Under the native title page (C-TITLEPAGE) that
+  is done by overriding the `title` element's `tag-begin`, and the mechanism below is exactly
+  why it has to be an override rather than a role remap:
+
   ```latex
-  \tagpdfsetup{role/new-tag = frametitle / H2}   % sits directly under the section H1
+  \EditInstance{titlepage-element}{title}
+    { … , tag-begin = {\tagpdfsetup{para/tag=H1,para/flattened}} , tag-end = {} }
   ```
-  and make the deck title the document's `H1` — it is plain text inside a frame, not a
-  sectioning command, so nothing tags it for you. **Do not reach for a manual struct here:**
+
+  ⚠ **Do not remap `Title` → `H1` instead.** ltx-talk's stock `title` instance wraps the title
+  in a *manually* opened `\tag_struct_begin:n {tag = Title}` around a paragraph that the
+  kernel's *automatic* per-paragraph tagger also tags (as `text`, RoleMapped to `P`). While
+  `Title` maps to plain `P` that nesting is harmless; remap it to `H1` and it becomes
+  `<Hn> shall not contain <P>`, which veraPDF's PDF/UA-2 profile rejects. The override above
+  *replaces* the manual wrapper rather than retagging it, which is the same lesson as the
+  hand-rolled case below. `tag-end` is left empty on purpose: the keys are scoped by the
+  `\group_begin:`/`\group_end:` the template already wraps each element in, so they revert on
+  their own, and a default `\tag_struct_end:` would fire with no matching begin. Cost: the PDF
+  then has no `/S /Title` element. Nothing requires one — the document title a checker reads is
+  XMP `dc:title`, which comes from `\title` and is unaffected (measured, 0.6.2).
+
+  The rest of this entry is the **hand-rolled** form of the same fix, from when the skill
+  recommended a custom title frame. It is kept because the trap it documents — a manual struct
+  colliding with the automatic per-paragraph tagger — is general, and because a deck still
+  carrying a hand-rolled title frame needs it. **Do not reach for a manual struct there
+  either:**
   ```latex
   {\Huge\bfseries \tagstructbegin{tag=H1}\tagmcbegin{}#1\tagmcend\tagstructend}   % WRONG
   ```

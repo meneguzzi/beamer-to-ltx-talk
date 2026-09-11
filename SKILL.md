@@ -148,7 +148,11 @@ Start from `assets/preamble-template.tex`. It already:
 - uses the **classic `algpseudocode`** engine, never `algpseudocodex` (see compromises);
 - **redefines `\section`** so it emits the section *and* a tagging-safe divider frame — the
   decks keep their original `\section{…}` lines untouched (`\section*{…}` opts out of the
-  divider); and defines `\coursetitlepage{…}{…}{…}`.
+  divider);
+- **restyles ltx-talk's native title page** (`\EditInstance{titlepage-element}{…}`) instead of
+  hand-rolling a title frame, so the deck keeps Beamer's own `\maketitle` title block; sets
+  `pdfauthor=` so `\author` can stay exactly as Beamer wrote it; and keeps
+  `\coursetitlepage{…}{…}{…}` as a shim, for decks converted before that change.
 
 Port from the old preamble: colour definitions, `\definecolor`s, custom math macros, the
 `\emph` redefinition, `hyperref` metadata, author/institute. **Drop**: `\usetheme`, every
@@ -191,8 +195,9 @@ at level one" — even though the compile is clean and the output says `Tagged: 
 > that finds `/Alt` is reported to read that string instead of the MathML. Both pass a
 > validator; only one is usable. See **A-MATHALT**, including what is and is not verified.
 
-While you are in `\coursetitlepage`, tag the deck title as the document's `H1`; nothing else
-in a deck is one. See Step 6b.
+The deck title is the document's `H1`, and the shared preamble already arranges that through
+the native title page's `tag-begin` — do not hand-write a struct for it. See Step 6b and
+A-HEADINGS.
 
 The ltx-talk preamble **requires** `\DocumentMetadata` (it uses `\tag_stop:`, `\EditInstance`).
 It is a **one-for-one replacement** for the Beamer preamble — load one or the other, never
@@ -249,7 +254,9 @@ nothing. That was claimed and unchecked until it broke decks (#26); it is now en
 | Sections | *(left as-is)* | *(left as-is)* | the preamble's redefined `\section` emits the divider; the script only strips `\AtBeginSection` and **warns** the TOC outline is lost |
 | Centring | `\center{X}` | `\begin{center}X\end{center}` | C-CENTER-ARG — a declaration, not a command; fatal under tagging |
 | Verbatim frames | `[…,containsverbatim]{T}` | `\begin{frame*}` + `\frametitle{T}` | |
-| Title frame | `\maketitle` + trailing centred text | `\coursetitlepage{…}{…}{…}` | usually needs a **manual** finish; styling and `H1`, not a bug fix — C-TITLEPAGE is retired |
+| Title frame | `\maketitle` + trailing centred text | *(kept as-is)* | the construct compiles verbatim; **manual**, and small — split a folded `\title`, re-tune the `\vspace` — C-TITLEPAGE |
+| Title frame | `\titlepage` | `\maketitle` | ltx-talk has no `\titlepage` at all: undefined, no title page. Rewritten automatically unless wrapped in `\frame{…}` — C-TITLE-CMDS |
+| Title extras | `\titlegraphic` / `\logo` / `\inst` / `\thanks` | *(none)* | no equivalent exists; **warns**. The first three error out, `\thanks` loses its text silently — C-TITLE-CMDS |
 
 The script **never edits commented-out lines** and preserves indentation. It prints a
 summary of every change and every warning. Things it deliberately leaves for you to do by
@@ -274,14 +281,33 @@ grep -nE '^\s*\\begin\{frame\}(<[^>]*>)?(\[[^]]*\])?\{' deck.tex     # must retu
 ```
 
 **One more thing the script does not do**, and you must:
-- **The title page.** Replace the `\maketitle` frame with `\coursetitlepage{…}{…}{…}`.
-  Strip any `%` comments out of the attribution text as you fold it into the third argument —
-  a stray `%` swallows the closing brace and you get `File ended while scanning use of
-  \coursetitlepage`.
-  Note the *reason* changed: plain `\maketitle` no longer overlaps trailing content, so
-  C-TITLEPAGE is retired as a defect. `\coursetitlepage` is still what to use, for a designed
-  layout with an attribution slot and because it is where the deck's `H1` goes (A-HEADINGS).
-  Both forms are correct; a deck already using either needs no change.
+- **The title page.** Keep it as close to the Beamer source as it will go. Beamer writes the
+  attribution as centred text *after* `\maketitle`, inside the title frame, with `\date{}`
+  empty — and **that whole construct compiles verbatim under ltx-talk**, `\and` and `\\` in
+  `\author` included. The overlap it used to hit is retired. So keep `\maketitle`, keep the
+  attribution where it is, and change only these three things (all in C-TITLEPAGE):
+  1. **Split a folded subtitle out of `\title`.** `\title{Main\\\large{Sub}}` makes the
+     subtitle a **second `H1`** and mangles `dc:title`. `\subtitle` is a Beamer command too, so
+     the deck still compiles as Beamer. `--lint` reports this.
+  2. **Re-tune the `\vspace`** above the attribution — Beamer's `-4em` is too much here; `-1em`
+     reproduces the original look.
+  3. **Set `pdfauthor=` once in the shared preamble** (the template does). `\author` is copied
+     into XMP `dc:creator`, emails and all. Fix it there, *not* by moving the emails out of
+     `\author` — that would make the deck stop matching its Beamer source to solve a problem the
+     preamble already solves.
+
+  ⚠ All of that assumes the deck says `\maketitle`. If it says **`\titlepage`** — the more usual
+  Beamer spelling — ltx-talk has no such command and there is no title page at all; the script
+  rewrites it, except inside a `\frame{…}` short form, which is not an ltx-talk frame either.
+  `\titlegraphic`, `\logo` and `\inst` have no equivalent and error out; `\thanks` loses its
+  text in silence. See **C-TITLE-CMDS**.
+
+  Also keep `\date{}`: `\@date` defaults to `\today`, so a deck with no `\date` prints the date
+  of the build. `--lint` reports a `\maketitle` with no `\date` and one with no `\title`.
+  A deck that would rather have the attribution inside the title block can put it in `\date{…}`
+  — a documented alternative with costs, see C-TITLEPAGE, not the default.
+  Decks converted earlier with `\coursetitlepage{…}{…}{…}` need **no edit** — the preamble keeps
+  that macro as a shim onto the native path.
 
 (`\end{frame}` → `\end{frame*}` pairing **is** now automatic — `convert_deck.py` walks the
 file after the line rewrites and closes every `frame*` properly.)
@@ -507,8 +533,10 @@ Three points of judgement the scripts cannot make for you:
 
 - **Headings.** `role/new-tag = frametitle / H2` is one safe line. The title's `H1` is not:
   hand-writing `\tagstructbegin{tag=H1}` compiles clean, passes Blackboard, and **fails
-  PDF/UA-2**. A-HEADINGS has the mechanism and the working code, already shipped in
-  `assets/preamble-template.tex`. Use it rather than rederiving it.
+  PDF/UA-2**, and so does remapping ltx-talk's own `Title` → `H1`, for the same reason. The
+  template gets it by overriding the `title` element's `tag-begin` instead. A-HEADINGS has the
+  mechanism and the working code, already shipped in `assets/preamble-template.tex`. Use it
+  rather than rederiving it.
 - **Tables.** Classify by asking *"does a cell still make sense read aloud on its own, with no
   column name attached?"* Yes → layout grid, demote with `table/tagging=div` and do not invent
   a header row. No → data table, needs real `TH`, often on both axes. Do not trust a "first row

@@ -1,32 +1,30 @@
-% Beamer source: the usual title frame with an attribution line after
-% \maketitle. Renders fine under Beamer. C-TITLEPAGE records that under ltx-talk
-% \maketitle produces a full, vertically-centred frame, so the attribution prints
-% ON TOP of the title -- a known 0.5.0 limitation.
+% Beamer source, in the shape the real course decks use: \date{} empty, the
+% subtitle folded into \title after a \\, and the "Material adapted from" block
+% as free-standing centred text INSIDE the title frame, after \maketitle.
 %
-% ⚠ THAT SYMPTOM IS GONE, and the entry is retired. It did not reproduce on
-% 0.5.3 (measured 2026-08-24) and does not reproduce on 0.6.2 (measured
-% 2026-09-10). The "maybe the trigger needs more than a minimal frame"
-% hypothesis was tested and does NOT hold: plain \maketitle plus a long
-% multi-line attribution block, plus a no-\vfill variant, plus \maketitle
-% outside any frame, all place the attribution clear of the title (61pt of gap
-% in the minimal case). Numbers are in the C-TITLEPAGE entry.
+% C-TITLEPAGE was originally filed because that trailing block printed ON TOP of
+% the title under ltx-talk 0.5.0. THAT SYMPTOM IS GONE -- it did not reproduce on
+% 0.5.3 (2026-08-24) or 0.6.2 (2026-09-11), against a one-line attribution, a long
+% multi-line block, a no-\vfill variant and \maketitle outside any frame.
 %
-% This fixture deliberately has NO naive.tex. A variant asserting a defect that
-% no longer exists would report ADVISORY on every run for ever. The consequence
-% is that nothing here would notice the overlap coming back.
-%
-% after.tex is kept because \coursetitlepage is still a reasonable title frame
-% -- now as a styling choice, not as a workaround. See #7.
+% So the conversion keeps this construct rather than working around it: see
+% after.tex, whose title block differs from this one in exactly two ways, both
+% forced and both still valid beamer. naive.tex is the hand-rolled title frame
+% the skill used to recommend, and what that costs.
 \documentclass{beamer}
 
-\title{Constraint Satisfaction}
-\author{A. Lecturer}
-\institute{University of Somewhere}
+\author[A. Lecturer]{A. Lecturer\\ \texttt{a.l@uni.ac.uk}}
+\institute[Somewhere]{University of Somewhere}
+\title[CSP]{Constraint Satisfaction\\\large{Backtracking and arc consistency}}
+\date{}
 
 \begin{document}
 \begin{frame}
-\maketitle
-\vfill
-{\footnotesize Material adapted from Russell \& Norvig.}
+	\maketitle
+	\vspace{-4em}
+	\begin{center}
+		Material adapted from: \\
+		Russell and Norvig (AIMA Book): Chapter 6
+	\end{center}
 \end{frame}
 \end{document}

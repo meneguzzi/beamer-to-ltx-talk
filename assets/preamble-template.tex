@@ -88,7 +88,11 @@
 \newcommand{\InstShort}  {<<SHORT INSTITUTION>>}      %% e.g. Aberdeen
 \newcommand{\InstLong}   {<<FULL INSTITUTION NAME>>}  %% e.g. University of Aberdeen
 
-\author[\AuthorShort]{\AuthorLong}
+%% Shaped exactly as the beamer source writes it, so the deck round-trips: the
+%% emails sit INSIDE \author, after a \\, and \and separates co-authors. Both
+%% work verbatim on the ltx-talk title page -- the titlepage template rebinds
+%% \and to \quad itself (C-AND-TITLE), and \\ is an ordinary line break there.
+\author[\AuthorShort]{\AuthorLong\\ \AuthorEmails}
 \institute[\InstShort]{\InstLong}
 
 %% ---------------------------------------------------------------------------
@@ -312,70 +316,18 @@
 
 %% hyperref metadata. With \DocumentMetadata active hyperref is already loaded;
 %% we only adjust its settings here.
+%%
+%% pdfauthor is NOT decoration. ltx-talk copies \author's argument into the
+%% document metadata (\g__tag_title_author_tl -> XMP dc:creator), so the emails
+%% and \\ that the beamer source keeps inside \author land in dc:creator too --
+%% measured on 0.6.2: dc:creator reads "A. Lecturer  a.l@uni.ac.uk". Setting
+%% pdfauthor here wins, and fixes it for every deck without touching a single
+%% deck's \author line. See references/compromises.md C-TITLEPAGE.
 \hypersetup{
     bookmarks=true,colorlinks=true,linkcolor=blue,linktocpage,bookmarksopen=true,
+    pdfauthor={\AuthorLong},
 }
 
-%% ---------------------------------------------------------------------------
-%% Custom title page.
-%%
-%% ltx-talk's stock \maketitle fills the whole frame and centres vertically, so
-%% the old decks' habit of adding a "Material adapted from ..." block after
-%% \maketitle collides with it. We therefore define our own title frame, which
-%% also lets us make the (otherwise bare) title slide our own.
-%%
-%%   \coursetitlepage{<main title>}{<subtitle>}{<attribution>}
-%%
-%% C-AND-TITLE: \AuthorLong holds "A \and B" (that is what \author wants). But
-%% \and is NOT a separator — LaTeX defines it as
-%%     \end{tabular}\hskip 1em \plus.17fil \begin{tabular}[t]{c}
-%% i.e. it is only legal INSIDE \author/\maketitle, where a tabular is already
-%% open. Typesetting \AuthorLong in running text therefore rips open an
-%% alignment and detonates: "Misplaced \crcr", "Missing } inserted", 101 errors
-%% on one real deck, all reported at \end{frame} — nowhere near the title page.
-%% So we rebind \and to a plain gap for the duration of the title frame.
-%%
-%% Note the whole frame avoids \\ as a line break too: \par + \vspace is the
-%% tagging-safe way to stack centred lines.
-%% ---------------------------------------------------------------------------
-\newcommand{\coursetitlepage}[3]{%
-  \begingroup
-  \renewcommand{\and}{\qquad}%   <-- C-AND-TITLE: \and is illegal outside \author
-  \begin{frame}
-    \centering
-    \vfill
-    %% A-HEADINGS: the deck title is the document's only H1 above the section
-    %% dividers, so without this the first frametitle is an orphan heading.
-    %% Plain text in a frame, not a sectioning command, so nothing tags it for
-    %% you (\title roles to /Title -> P) -- but do NOT reach for a manual
-    %% \tagstructbegin{tag=H1} here: the kernel's automatic per-paragraph
-    %% tagger fires on the first character actually typeset (here, the
-    %% title's first letter) regardless of how soon \par follows, and it
-    %% opens ITS OWN Part->P wrapper as a child of whatever struct is
-    %% already open -- landing Part/P inside the manual H1, which PDF/UA-2
-    %% forbids. Instead point the automatic tagger at H1 directly: force the
-    %% title onto its own real paragraph and set para/tag + para/flattened
-    %% (skips the usual outer Part wrapper) for exactly that paragraph's
-    %% lifetime -- the \begingroup/\endgroup MUST enclose the \par, or
-    %% para/begin and para/end fire with mismatched settings.
-    \begingroup
-      \tagpdfsetup{para/tag=H1,para/flattened}%
-      {\color{\ThemeAccent}\Huge\bfseries #1}\par
-    \endgroup
-    \vspace{0.5em}
-    {\Large #2}\par\vspace{2.5em}
-    {\large \AuthorLong}\par\vspace{0.4em}
-    {\small\ttfamily \AuthorEmails}\par\vspace{0.4em}
-    \InstLong\par\vspace{2.5em}
-    {\small #3}%
-    \vfill
-  \end{frame}%
-  \endgroup
-}
-
-%% ---------------------------------------------------------------------------
-%% Visual style via ltx-talk templates
-%% ---------------------------------------------------------------------------
 %% C-EDITINSTANCE-EXPAND: the kernel template colour keys want a literal colour
 %% NAME and will NOT expand a macro — passing \ThemeAccent directly gives
 %% "Unknown color '\ThemeAccent'", once per frame. \colorlet turns the macro
@@ -383,6 +335,154 @@
 \colorlet{themeaccent}{\ThemeAccent}
 \colorlet{themeaccenttext}{\ThemeAccentText}
 
+%% ---------------------------------------------------------------------------
+%% Title page — ltx-talk's NATIVE \maketitle, restyled.
+%%
+%% ltx-talk ships a `titlepage' template with five `titlepage-element'
+%% instances (title, subtitle, author, institute, date), each taking color,
+%% font, before-skip, after-skip, tag-begin and tag-end. Restyling them gets a
+%% designed title page while keeping \maketitle. The win is item 1 below; item 2
+%% is what it costs nothing to keep, and is worth stating because it is the one
+%% thing a hand-rolled frame also got right and would be easy to lose here:
+%%
+%%   1. ONE SOURCE OF TRUTH. Without \maketitle the long argument of \title is
+%%      never rendered anywhere, so it silently duplicates the title frame's
+%%      arguments and drifts from them. Only \title[short] stays live, consumed
+%%      by the footer's element-order below. On one real course that had already
+%%      produced a deck whose \title disagreed with its title page, and a deck
+%%      with NO \title at all, whose footer was blank on every page with nothing
+%%      to catch it.
+%%   2. THE TITLE IS STILL THE DOCUMENT'S H1, and the class gives us a clean way
+%%      to say so (see the tag-begin override below). A-HEADINGS depends on the
+%%      deck having an H1 somewhere, and \section is otherwise the only one.
+%%
+%% It also removes the C-AND-TITLE hazard outright: the template does
+%% \cs_set_protected:Npn \and {\quad} around the elements, so "A \and B" in
+%% \author typesets correctly here with no local rebinding.
+%%
+%% ⚠ THE ATTRIBUTION STAYS WHERE BEAMER PUT IT. The beamer source writes the
+%% "Material adapted from ..." block as free-standing centred text inside the
+%% title frame, AFTER \maketitle, with \date{} empty:
+%%
+%%   \begin{frame}
+%%     \maketitle
+%%     \vspace{-1em}          %% re-tune: beamer's -4em is too much here
+%%     \begin{center}
+%%       Material adapted from: \\
+%%       Russell and Norvig (AIMA Book): Chapters 7 and 9
+%%     \end{center}
+%%   \end{frame}
+%%
+%% That construct works VERBATIM under ltx-talk 0.6.2 -- measured, 0 errors,
+%% Tagged: yes, nothing overlapping. It used to collide, which is what
+%% C-TITLEPAGE was originally filed for, and that symptom is retired (#39). So
+%% keep it: the deck's title block stays byte-identical to the beamer source and
+%% switching a course back to beamer needs no edit here at all.
+%%
+%% Only the \vspace needs re-tuning. Beamer's -4em was compensating for beamer's
+%% own title spacing; under ltx-talk it pulls the attribution up until it nearly
+%% touches the institute line (measured: institute yMax 173.45, attribution
+%% yMin 172.61). Set it by eye against the skips above.
+%%
+%% The `date' element below is restyled anyway, so a deck that prefers the
+%% attribution inside the title block proper can put it in \date{...} instead.
+%% That is a real alternative, not an error, but it costs something: it misuses a
+%% semantic field on output whose whole point is accessibility, \@shortdate is
+%% \let from \@date at class load so anything wanting a real short date gets the
+%% attribution instead, a deck that wants BOTH a date and an attribution cannot
+%% express it, and the title block stops matching the beamer source. See
+%% references/compromises.md C-TITLEPAGE.
+%%
+%% ⚠ \date is NOT empty by default. \@date defaults to \today, so a deck that
+%% sets no \date at all prints the DATE OF THE BUILD, changing on every rebuild.
+%% The beamer decks already write \date{} -- keep it. convert_deck.py warns.
+%%
+%% ⚠ DO NOT leave a folded subtitle in \title. The beamer source writes
+%%     \title[Short]{Main\\\large{Subtitle}}
+%% and under the H1 override below that \\ makes the subtitle a SECOND H1 --
+%% measured, /S /H1 = 2 against 1 when it is split. Split it, which \subtitle
+%% does in beamer too, so the deck still compiles either way:
+%%     \title[Short]{Main}
+%%     \subtitle{Subtitle}
+%% convert_deck.py reports an unsplit one.
+%% ---------------------------------------------------------------------------
+
+%% A-HEADINGS, on the title page. ltx-talk's stock `title' instance wraps the
+%% title as \tag_struct_begin:n{tag=Title} #1 \par \tag_struct_end: -- a
+%% MANUALLY opened struct around a paragraph that the kernel's AUTOMATIC
+%% per-paragraph tagger also tags (as `text', RoleMapped to P). That nesting is
+%% harmless while Title maps to plain P, and it is why you cannot simply remap
+%% Title -> H1: that turns it into "<Hn> shall not contain <P>", which veraPDF's
+%% PDF/UA-2 profile rejects. Same trap as C-CENTER-ARG, built into the class
+%% rather than authored here.
+%%
+%% So do not retag the wrapper -- REPLACE it, and let the automatic tagger
+%% produce the H1 directly, exactly as A-HEADINGS prescribes. tag-end is left
+%% empty on purpose: the keys are scoped by the \group_begin:/\group_end: the
+%% template already wraps each element in, so they revert on their own, and a
+%% default \tag_struct_end: here would fire with no matching begin.
+%%
+%% Cost, stated: the PDF then has no /S /Title element. Nothing requires one --
+%% the document title a checker reads is XMP dc:title, which comes from \title
+%% and is unaffected (measured) -- and an H1 is worth more, because without it a
+%% deck with no \section has no level-one heading at all.
+\EditInstance{titlepage-element}{title}
+  { color = themeaccent , font = \Huge\bfseries , before-skip = 0pt ,
+    after-skip = 0.5em ,
+    tag-begin = {\tagpdfsetup{para/tag=H1,para/flattened}} , tag-end = {} }
+%% The stock subtitle is the blue `structure' colour; a typical beamer title
+%% page has it black, so say so explicitly.
+\EditInstance{titlepage-element}{subtitle}
+  { color = black , font = \Large , before-skip = 0pt , after-skip = 2.5em }
+\EditInstance{titlepage-element}{author}
+  { font = \large , before-skip = 0pt , after-skip = 0.4em }
+\EditInstance{titlepage-element}{institute}
+  { font = \normalsize , before-skip = 0pt , after-skip = 2.5em }
+\EditInstance{titlepage-element}{date}
+  { font = \small , before-skip = 0pt , after-skip = 0pt }
+
+%% ---------------------------------------------------------------------------
+%% Compatibility shim.
+%%
+%%   \coursetitlepage{<main title>}{<subtitle>}{<attribution>}
+%%
+%% Earlier conversions hand-rolled the title frame with this macro, and it is
+%% deployed across several courses. It now routes to the native title page, so
+%% those decks need no edit and stop being able to drift: \title, the footer and
+%% the printed title page all come from its first argument. A deck that never
+%% called \title at all gets its footer title back as a side effect.
+%%
+%% NEW conversions should not use it. The beamer source already says what to
+%% write -- \title/\subtitle/\date{} and \maketitle, with the attribution left as
+%% centred text after it -- so there is nothing for a macro to package. The third
+%% argument here goes to \date, which is the alternative form described above.
+%%
+%% The guard exists because a deck may never have called \title at all. On
+%% ltx-talk 0.6.2 \@shorttitle is defined-and-empty from class load, so the
+%% \ifx branch is the one that fires and \@ifundefined is belt and braces; on
+%% 0.5.x \@shorttitle was genuinely UNDEFINED and \ifx alone took the wrong
+%% branch, emitting an empty footer title in silence. \makeatletter is needed
+%% because this file is \input, not a package.
+%% ---------------------------------------------------------------------------
+\makeatletter
+\newcommand{\coursetitlepage}[3]{%
+  \@ifundefined{@shorttitle}
+    {\title{#1}}
+    {\ifx\@shorttitle\@empty
+       \title{#1}%
+     \else
+       \let\course@footername\@shorttitle
+       \expandafter\title\expandafter[\course@footername]{#1}%
+     \fi}%
+  \subtitle{#2}%
+  \date{#3}%
+  \maketitle
+}
+\makeatother
+
+%% ---------------------------------------------------------------------------
+%% Visual style via ltx-talk templates
+%% ---------------------------------------------------------------------------
 \EditInstance{header}{std}{
   background-color = themeaccent,
   color            = themeaccenttext,
