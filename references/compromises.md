@@ -37,7 +37,7 @@ for d in tests/fixtures/*/; do
 done
 ```
 
-As of 2026-09-11 that is 13 self-verifying and 1 compile-only, out of 14 fixtures, against 44
+As of 2026-09-11 that is 13 self-verifying and 2 compile-only, out of 15 fixtures, against 45
 entries in this file. The figure recorded here before #7 was 8 and 6, which had already gone
 stale — run the loop, do not trust the sentence. An entry with no fixture at all has nothing
 checking it — **#40** tracks the 30 in that state.
@@ -1235,8 +1235,57 @@ failure it prevents is invisible. `\makeatletter` is required because the shared
 - **Upstream:** reported and rejected. `josephwright/ltx-talk#222` was closed `invalid` /
   `not_planned` on 2026-06-15 — `$$…$$` is not LaTeX syntax — and the `article` reproduction was
   posted in that thread. Do not refile it there.
+- ⚠ **One exception, and it reverses this entry's advice: inside a `center` environment keep
+  `$$`.** `\[…\]` there unbalances tagpdf's paragraph hooks. See **C-DISPLAY-IN-CENTER**;
+  `convert_deck.py` skips those sites.
 - **Revisit when:** the kernel's paragraph handling changes, or it is taken up by latex-lab. The
   workaround is unaffected either way: `\[…\]` is correct LaTeX and costs nothing.
+
+## C-DISPLAY-IN-CENTER — display math inside `center` unbalances the paragraph hooks  ⚠ log-only; any class under `\DocumentMetadata`
+
+- **Symptom:** a display inside a `center` **environment** emits, at `\end{document}` and nowhere
+  near the display:
+
+  ```
+  ! Package tagpdf Error: The number of automatic begin (242) and end (210) text
+  (tagpdf)                para hooks differ!
+  ```
+
+  `lualatex` exits 1. A build that ignores exit status and does not read the log sees a PDF with
+  the right page count, `Tagged: yes` and `/S /H1` = 1 — which is how 33 sites in one deck got
+  through every gate. Under `-halt-on-error` the build dies and emits **no PDF at all**.
+- **`$$` is the only display spelling that survives here**, which is exactly the spelling
+  C-DISPLAY-DOLLAR rewrites away. The two entries give opposite advice on the same sites; neither
+  is wrong, the context decides.
+- **Measured** — ltx-talk 0.6.2 (class date 2026-09-07), TeX Live 2026, lualatex, two passes.
+  `errors` = `grep -cE '^!'` on the log.
+
+  | wrapper | `\[…\]` | `$$…$$` | `displaymath` | `equation*` |
+  |---|---|---|---|---|
+  | `\begin{center}` | 1 | **0** | 1 | 1 |
+  | `{\centering … \par}` | 0 | 0 | — | — |
+  | none | 0 | 0 | — | — |
+
+- **Cause: `\DocumentMetadata`, not the class.** Plain `article` reproduces it, and `tagging=on`
+  without `pdfstandard` reproduces it too — the same discriminator, and the same root cause, as
+  C-DISPLAY-DOLLAR. `columns`/`column` is irrelevant: `center` alone is enough.
+- **Workaround:** keep `$$…$$` inside `center` bodies. `convert_deck.py` skips them and `--lint`
+  reports any `\[`, `displaymath` or `equation*` already sitting there.
+- ⚠ **Do not "fix" it by dropping the `center` wrapper.** Display math centres itself, so the
+  wrapper looks free, but it is not layout-neutral: display `yMin` measured at 169.69 inside
+  `center`, 149.77 under `{\centering…\par}`, 151.76 with no wrapper. `center` contributes about
+  18pt of vertical space, so removing it shifts content and can move page counts.
+- **No `naive.tex`.** The runner builds every variant with `-halt-on-error`, under which this
+  defect exits 1 and produces no PDF, so a naive variant reports as "did not compile" rather than
+  as the defect reproducing. `tests/run_display_in_center_selftest.sh` carries the
+  mutation-checkable guard instead, at the converter level. Same constraint as C-FRAMESTAR-TAG.
+- **Verified:** 2026-09-11, ltx-talk 0.6.2 — still reproduces
+  (`tests/fixtures/C-DISPLAY-IN-CENTER/`, and a 9-line `article` MWE)
+- **Upstream:** not yet filed. Belongs against latex-lab / tagpdf paragraph handling, **not**
+  `josephwright/ltx-talk` — the `article` reproduction rules the class out, the same way it did
+  for C-DISPLAY-DOLLAR.
+- **Revisit when:** tagpdf's paragraph-hook accounting changes, or latex-lab takes up display
+  handling inside centring environments.
 
 ## C-DISPMATH-NEWLINE — `\\` after display math is invalid
 

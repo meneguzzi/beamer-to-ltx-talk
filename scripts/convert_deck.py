@@ -145,6 +145,70 @@ _VB_OPEN_RE = re.compile(r'\\begin\{(?:' + '|'.join(VERBATIM_ENVS) + r')\*?\}')
 _VB_CLOSE_RE = re.compile(r'\\end\{(?:' + '|'.join(VERBATIM_ENVS) + r')\*?\}')
 _DOLLAR_RE = re.compile(r'(?<!\\)\$\$')
 
+# --- C-DISPLAY-IN-CENTER ------------------------------------------------------
+# A display inside a `center` ENVIRONMENT unbalances tagpdf's paragraph hooks. $$
+# is the one spelling that survives there -- exactly the one C-DISPLAY-DOLLAR
+# rewrites away -- so that rewrite must skip these sites. Do NOT "fix" it by
+# dropping the center wrapper: that is not layout-neutral. Measurements, cause and
+# the article reproduction are in references/compromises.md, C-DISPLAY-IN-CENTER.
+_CENTER_OPEN_RE = re.compile(r'\\begin\{center\}')
+_CENTER_CLOSE_RE = re.compile(r'\\end\{center\}')
+# (?<!\\) guards the line-break form: `\\[1em]` is \\ with an optional spacing
+# argument, not a display. Only an UNdoubled \[ opens display math.
+_DISPLAY_IN_CENTER_RE = re.compile(r'(?<!\\)\\\[|\\begin\{(?:displaymath|equation\*)\}')
+
+
+def center_depth_map(lines):
+    """Index -> True when that line lies inside a `center` environment body.
+
+    Conservative at the boundary: a line that OPENS a center counts as inside, so a
+    $$ sharing that line is left alone rather than rewritten on a guess -- skipping
+    a rewrite is the safe direction. Verbatim bodies open no region.
+    """
+    flags, depth, in_vb = {}, 0, False
+    for i, line in enumerate(lines):
+        if is_comment(line):
+            flags[i] = depth > 0
+            continue
+        if in_vb:
+            if _VB_CLOSE_RE.search(line):
+                in_vb = False
+            flags[i] = depth > 0
+            continue
+        if _VB_OPEN_RE.search(line):
+            in_vb = True
+            flags[i] = depth > 0
+            continue
+        code = re.sub(r'(?<!\\)%.*$', '', line)
+        opens = len(_CENTER_OPEN_RE.findall(code))
+        closes = len(_CENTER_CLOSE_RE.findall(code))
+        flags[i] = depth > 0 or opens > 0
+        depth = max(0, depth + opens - closes)
+    return flags
+
+
+def display_in_center_findings(text):
+    r"""C-DISPLAY-IN-CENTER lint: \[ / displaymath / equation* inside a center body."""
+    lines = text.split('\n')
+    flags = center_depth_map(lines)
+    out = []
+    for i, line in enumerate(lines):
+        if is_comment(line) or not flags.get(i):
+            continue
+        code = re.sub(r'(?<!\\)%.*$', '', line)
+        if _DISPLAY_IN_CENTER_RE.search(code):
+            out.append((i + 1, 'C-DISPLAY-IN-CENTER',
+                        'display math inside a `center` ENVIRONMENT unbalances tagpdf\'s '
+                        'paragraph hooks: "The number of automatic begin (N) and end (M) text '
+                        'para hooks differ!", emitted at \\end{document} and nowhere near this '
+                        'line. The build still paginates correctly and reports Tagged: yes, so '
+                        'only the log shows it. $$...$$ is the one spelling that survives here '
+                        '(see C-DISPLAY-DOLLAR, which gives the OPPOSITE advice everywhere '
+                        'else). Do NOT drop the center wrapper to fix it -- that is not '
+                        'layout-neutral and can move the page count.',
+                        line.strip()))
+    return out
+
 
 def rewrite_display_dollar(text: str):
     r"""C-DISPLAY-DOLLAR: rewrite $$...$$ to \[...\].
@@ -162,7 +226,8 @@ def rewrite_display_dollar(text: str):
     count is reported so it can be eyeballed.
     """
     lines = text.split('\n')
-    eligible, inside = [], False
+    centred = center_depth_map(lines)
+    eligible, skipped_lines, inside = [], [], False
     for i, line in enumerate(lines):
         if is_comment(line):
             continue
@@ -174,8 +239,28 @@ def rewrite_display_dollar(text: str):
             inside = True
             continue
         code = re.sub(r'(?<!\\)%.*$', '', line)
-        if _DOLLAR_RE.search(code):
+        if not _DOLLAR_RE.search(code):
+            continue
+        # C-DISPLAY-IN-CENTER: $$ is the only display spelling that survives inside
+        # a center environment, so rewriting it there trades a silent list outdent
+        # for a broken tag tree. Leave these alone; --lint reports them.
+        if centred.get(i):
+            skipped_lines.append(i)
+        else:
             eligible.append(i)
+
+    skipped = sum(len(_DOLLAR_RE.findall(re.sub(r'(?<!\\)%.*$', '', lines[i])))
+                  for i in skipped_lines)
+    if skipped:
+        if skipped % 2:
+            WARN.append(('C-DISPLAY-IN-CENTER',
+                         f'found an ODD number of $$ delimiters ({skipped}) inside `center` '
+                         'bodies, so a display appears to straddle the \\begin{center} or '
+                         '\\end{center} boundary. Nothing inside center was rewritten (correct '
+                         'either way), but check those sites by hand.'))
+        else:
+            NOTE.append(f'$$...$$ left as-is inside center ({skipped // 2} pair(s), '
+                        'C-DISPLAY-IN-CENTER)')
 
     total = sum(len(_DOLLAR_RE.findall(re.sub(r'(?<!\\)%.*$', '', lines[i])))
                 for i in eligible)
@@ -436,11 +521,13 @@ LINTS = [
      'scripts/fix_frame_titles.py).'),
     ('C-DISPLAY-DOLLAR',
      re.compile(r'(?<!\\)\$\$'),
-     'raw $$...$$ display math: under ltx-talk (and ltx-talk ONLY -- article and beamer are '
-     'both immune) every \\item AFTER the display loses its list indentation and renders '
-     'flush with the frame margin. Nothing warns, the page count is right, the tag tree is '
-     'sound, and pdftotext gives the same word order, so only a rendered page shows it. Use '
-     '\\[...\\]; convert_deck.py rewrites these automatically.'),
+     'raw $$...$$ display math: under \\DocumentMetadata (any class -- beamer is immune only '
+     'because it cannot load it at all) every \\item AFTER the display loses its list '
+     'indentation and renders flush with the frame margin. Nothing warns, the page count is '
+     'right, the tag tree is sound, and pdftotext gives the same word order, so only a '
+     'rendered page shows it. Use \\[...\\]; convert_deck.py rewrites these automatically -- '
+     'EXCEPT inside a `center` environment, where $$ is the only spelling that survives and '
+     'must be kept (C-DISPLAY-IN-CENTER).'),
     ('C-FRAMESUBTITLE',
      # tempered: skip the line that *defines* a \frametitlesub dual-compile shim,
      # whose Beamer-side body legitimately contains \framesubtitle.
@@ -787,6 +874,7 @@ def lint(text: str, path: str) -> int:
                 hits.append((lineno, cid, msg, line.strip()))
     hits.extend(handout_mode_findings(text))
     hits.extend(titlepage_findings(text))
+    hits.extend(display_in_center_findings(text))
     hits.sort(key=lambda h: h[0])
 
     print(f'\n=== convert_deck.py --lint: {path} ===', file=sys.stderr)

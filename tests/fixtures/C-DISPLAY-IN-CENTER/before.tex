@@ -1,0 +1,17 @@
+% Beamer source: a display inside a center environment. Harmless under Beamer --
+% it has no \DocumentMetadata and cannot load one (C-NO-DOCMETA), so neither
+% spelling of the display does anything to a tag tree that does not exist.
+%
+% The hazard appears only after conversion. See after.tex.
+\documentclass{beamer}
+
+\begin{document}
+\begin{frame}
+\frametitle{Linear model}
+The line through the data:
+\begin{center}
+$$y = mx + c$$
+\end{center}
+Fitted by least squares.
+\end{frame}
+\end{document}

@@ -73,6 +73,9 @@ Most are not in the upstream docs because they only surface under *tagging*
 >    do not file it; fold both parts into `\frametitlesub{Title}{Subtitle}`.
 > 8. **`$$…$$` display math** → every `\item` after the display loses its list indentation
 >    (C-DISPLAY-DOLLAR). Any class under `\DocumentMetadata`, not ltx-talk's own doing.
+>    **Except inside a `center` environment**, where `\[…\]` instead unbalances tagpdf's
+>    paragraph hooks and `$$` is the only spelling that works (C-DISPLAY-IN-CENTER). The
+>    converter skips those sites; `--lint` reports any already there.
 >    `convert_deck.py` rewrites these to `\[…\]`.
 >
 > Three rules that follow from the above:
@@ -334,7 +337,8 @@ to zero before spending a compile.
 It flags: unconverted braced frame titles (C-FRAMETITLE / C-FRAMETITLE-NESTED), `\center{…}`
 and friends (C-CENTER-ARG), `\State<n>` silent overlays (C-OVERLAY-ALGO), `\framesubtitle`
 (C-FRAMESUBTITLE — accepted by the class and never typeset), raw `$$…$$`
-(C-DISPLAY-DOLLAR — outdents every later `\item`), bare Beamer frame options
+(C-DISPLAY-DOLLAR — outdents every later `\item`), display math inside a `center`
+environment (C-DISPLAY-IN-CENTER — unbalances the paragraph hooks, log-only), bare Beamer frame options
 (C-FRAME-OPT — `[b]`/`[t]` discarded, so the frame renders centred), leftover
 `\tableofcontents` (C-TOC), Beamer-only commands (C-NOBEAMER, C-BACKGROUND), `algpseudocodex`
 (C-ALGO), and the `algorithm` float (C-ALGO-FLOAT).
