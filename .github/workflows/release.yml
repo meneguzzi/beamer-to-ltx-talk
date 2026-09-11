@@ -1,24 +1,37 @@
-name: Attach skill zip to release
+name: Draft a release with the skill zip
 
-# Builds beamer-to-ltx-talk-<tag>.zip in the claude.ai "Upload a skill" shape
-# (a single top-level <skill-name>/ folder containing SKILL.md) and attaches
-# it to the GitHub release for the tag. Does NOT create the release itself
-# or write release notes -- cut the release by hand (`gh release create` or
-# the GitHub UI) so notes stay reviewed, then this fills in the asset.
+# Builds beamer-to-ltx-talk-<tag>.zip in the claude.ai "Upload a skill" shape (a
+# single top-level <skill-name>/ folder containing SKILL.md) and attaches it to a
+# DRAFT release for the tag. It does NOT publish, and it does NOT write release
+# notes -- write those by hand so they stay reviewed (see issue #47), then publish.
+#
+# Why a draft, and why on tag push rather than `release: published`:
+# immutable releases are enabled on this repo, and a published release rejects
+# asset uploads with "HTTP 422: Cannot upload assets to an immutable release".
+# That is what left v1.2.0 with no zip attached. A draft is still mutable, so the
+# asset goes on while the release is a draft and is locked in when you publish.
+#
+# Building here rather than locally is deliberate: this runs against a clean
+# checkout of the tag, so the zip cannot pick up uncommitted working-tree changes.
+#
+# To cut a release:
+#   git tag v1.2.3 && git push origin v1.2.3     # this workflow drafts it
+#   gh release edit v1.2.3 --notes-file notes.md --draft=false
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
 
 jobs:
-  build-and-attach:
+  build-and-draft:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.ref_name }}
 
       - name: Verify SKILL.md name matches folder
         run: |
@@ -39,12 +52,31 @@ jobs:
           tag="${GITHUB_REF_NAME}"
           stage="$RUNNER_TEMP/beamer-to-ltx-talk"
           mkdir -p "$stage"
+          # git archive honours .gitattributes export-ignore, which is what keeps
+          # tests/ and .github/ out of the shipped skill.
           git archive HEAD | tar -x -C "$stage"
           zip_name="beamer-to-ltx-talk-${tag}.zip"
           (cd "$RUNNER_TEMP" && zip -r -X "$GITHUB_WORKSPACE/$zip_name" beamer-to-ltx-talk)
           echo "ZIP_NAME=$zip_name" >> "$GITHUB_ENV"
 
-      - name: Attach to release
+      - name: Create or update the draft release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" "${ZIP_NAME}" --clobber
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            # A release already exists for this tag. Only a draft can take the
+            # asset; a published one is immutable and would 422.
+            if [ "$(gh release view "$tag" --json isDraft -q .isDraft)" != "true" ]; then
+              echo "Release $tag is already published, so its assets are immutable." >&2
+              echo "Delete and recreate it, or attach the zip at creation time." >&2
+              exit 1
+            fi
+            gh release upload "$tag" "$ZIP_NAME" --clobber
+          else
+            gh release create "$tag" --draft --title "$tag" \
+              --notes 'Draft. Replace these notes before publishing -- see issue #47 for the two-section template.' \
+              "$ZIP_NAME"
+          fi
+          echo "Drafted $tag with $ZIP_NAME. Write the notes, then publish:"
+          echo "  gh release edit $tag --notes-file NOTES.md --draft=false"
