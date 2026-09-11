@@ -68,6 +68,9 @@ jobs:
       - name: Conversion stamp self-test (tests/run_stamp_conversion_selftest.sh)
         run: bash tests/run_stamp_conversion_selftest.sh
 
+      - name: Display-in-center guard self-test (tests/run_display_in_center_selftest.sh)
+        run: bash tests/run_display_in_center_selftest.sh
+
       - name: Lint C-HANDOUT-MODE (fires on before.tex, silent on after.tex)
         run: |
           set -e

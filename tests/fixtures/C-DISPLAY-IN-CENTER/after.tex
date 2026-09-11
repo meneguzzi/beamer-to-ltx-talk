@@ -1,0 +1,42 @@
+% Converted. The $$ inside the center environment is DELIBERATELY still $$.
+%
+% C-DISPLAY-DOLLAR says to rewrite $$...$$ to \[...\] and convert_deck.py does so
+% automatically -- but inside a `center' ENVIRONMENT that rewrite unbalances
+% tagpdf's paragraph hooks:
+%
+%   ! Package tagpdf Error: The number of automatic begin (N) and end (M) text
+%   (tagpdf)                para hooks differ!
+%
+% emitted at \end{document}, nowhere near the display. $$ is the only display
+% spelling that survives inside center (C-DISPLAY-IN-CENTER).
+%
+% Measured, ltx-talk 0.6.2 (class date 2026-09-07), TeX Live 2026, lualatex,
+% two passes, errors = grep -cE '^!' on the log:
+%
+%   wrapper                  \[...\]  $$...$$  displaymath  equation*
+%   \begin{center}                 1        0            1          1
+%   {\centering ... \par}          0        0            -          -
+%   no wrapper                     0        0            -          -
+%
+% There is no naive.tex for this fixture. The runner builds every variant with
+% -halt-on-error, and this defect exits 1 and emits NO PDF under that flag, so a
+% naive variant would be reported as "did not compile" rather than as the defect
+% reproducing. before.tex's Beamer build plus this file's clean log are the test.
+% Same reason C-FRAMESTAR-TAG has no naive.tex (see #48).
+%
+% Note the defect is NOT silent at the exit code -- lualatex returns 1. It looks
+% silent only to a build that ignores exit status and does not read the log: such
+% a build emits a PDF with the right page count and Tagged: yes.
+\DocumentMetadata{lang=en-GB, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+
+\begin{document}
+\begin{frame}
+\frametitle{Linear model}
+The line through the data:
+\begin{center}
+$$y = mx + c$$
+\end{center}
+Fitted by least squares.
+\end{frame}
+\end{document}
