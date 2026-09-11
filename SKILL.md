@@ -39,6 +39,9 @@ Most are not in the upstream docs because they only surface under *tagging*
 > - `scripts/fix_frame_titles.py` — **must be run after `convert_deck.py`**; it catches the
 >   nested-brace frame titles that `convert_deck.py` skips *silently* (C-FRAMETITLE-NESTED).
 > - `scripts/alt_text_audit.py` / `scripts/alt_text_apply.py` — the alt-text worklist.
+> - `scripts/stamp_conversion.py` — writes `ltx-talk-conversion.toml` into the converted
+>   repo, recording which ltx-talk and which converter it was built against (Step 6c).
+>   Write-once: a repo converted without it can never be given one afterwards.
 > - The sibling `latex-beamer` skill's `references/ltx-talk.md` has general ltx-talk syntax
 >   (overlays, columns, templates). Use it for *how ltx-talk works*; use this skill for
 >   *how to convert*.
@@ -570,10 +573,45 @@ false-negative round here: a change that had worked was reported as having done 
 **Report contrast and table changes to the author.** Darkening a palette changes the look of
 every slide, and adding a header row changes what is on one. Neither is a silent commit.
 
+## Step 6c — Stamp the conversion (one command, and it cannot be done later)
+
+```sh
+scripts/stamp_conversion.py COURSE_DIR [--engine lualatex]
+```
+
+Writes `COURSE_DIR/ltx-talk-conversion.toml`: the ltx-talk version and class date (read from
+`\ProvidesExplClass`, **never** `tlmgr info` — that reports the CTAN catalogue version and lags
+the installed class), this skill's `git describe`, the date, the engine, the TeX Live year, and
+the `\DocumentMetadata` actually in force.
+
+**Do this even though nothing needs it today.** The record is write-once: a repo converted
+without it can never be given one retrospectively, because the versions it would have recorded
+are gone the moment either is upgraded. What it buys is the ability to answer "which decks
+predate this change?" the next time a catalogue entry is retired — or **retracted**, which has
+happened: C-TITLEPAGE's advice was reversed outright, and every course converted before that
+carries a hand-rolled title frame that is now dead weight with nothing in the repo saying so.
+
+Re-running it updates the file in place and keeps the previous stamp under `[[superseded]]`,
+reporting on stderr what moved. Anything it cannot determine is named in `[unknown]` with a
+reason rather than guessed — a key that could not be read and a key that was never asked for are
+different facts.
+
+It writes one file at the repo root and touches nothing else. It deliberately does **not** stamp
+the decks or the shared preamble: `convert_deck.py` is text-in/text-out and
+`tests/run_converter_idempotence.sh` enforces `convert(x) == x`, which a per-deck stamp breaks on
+the second run — and a template value a human has to fill is a value that stays a placeholder.
+
+What it does *not* record — which entries were applied, which by hand, which lint hits were
+knowingly skipped — is **#12**, along with the task that acts on all of it.
+
+---
+
 ## Step 7 — Conversion report (always deliver this)
 
 End with a short report per deck:
-- ltx-talk version targeted, and any upstream fixes you adopted because of Step 0.2.
+- ltx-talk version targeted, and any upstream fixes you adopted because of Step 0.2. This is the
+  human-readable half of what Step 6c records mechanically; if the two disagree, the stamp is
+  the one a later upgrade will believe.
 - Page count: baseline vs converted (slides) and handout.
 - **Compromises made** (cite `references/compromises.md` IDs), e.g. "section outlines →
   dividers (C-TOC)", "algorithm engine swapped (C-ALGO)".
