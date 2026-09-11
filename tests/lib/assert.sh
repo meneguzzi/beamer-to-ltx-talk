@@ -199,6 +199,33 @@ must_have_struct_count() {
   note "/S /$kind = $got"
 }
 
+# dc_title -- the XMP dc:title of the PDF, x-default language. Empty if absent.
+#
+# This is the document title a PDF/UA checker reads (veraPDF ua2 clause 8.11.1),
+# and it comes from \title, NOT from whatever the title page happens to print --
+# unless the document sets pdftitle= explicitly in \hypersetup or
+# \DocumentMetadata, which wins. A fixture asserting on this must not set one.
+# C-TITLEPAGE is exactly about those two drifting apart, so the fixture needs to
+# see the metadata and not only the text layer. pdfinfo does not show it on a
+# PDF 2.0 file -- the Info dictionary is gone and the title lives in the XMP.
+dc_title() {
+  local q t; q=$(mktemp)
+  if ! qpdf --qdf --object-streams=disable "$PDF" "$q" 2>/dev/null; then
+    rm -f "$q"; echo ""; return
+  fi
+  t=$(strings "$q" | grep -A3 '<dc:title>' \
+      | sed -n 's/.*<rdf:li[^>]*xml:lang="x-default"[^>]*>\(.*\)<\/rdf:li>.*/\1/p' | head -1)
+  rm -f "$q"
+  echo "$t"
+}
+
+# must_have_dc_title "expected" -- exact match on the XMP document title.
+must_have_dc_title() {
+  local want="$1" got; got=$(dc_title)
+  [ "$got" = "$want" ] || fail "XMP dc:title is '$got', expected '$want'"
+  note "XMP dc:title = '$got'"
+}
+
 # --- PDF/UA-2 validation (veraPDF) -------------------------------------------
 #
 # Two of the font-level defects in the catalogue have NO cheap signal:

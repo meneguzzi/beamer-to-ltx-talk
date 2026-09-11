@@ -1,0 +1,48 @@
+% THE DEFECT, kept compiling on purpose: the conversion done the way the skill
+% used to recommend -- a hand-rolled title frame instead of \maketitle, and the
+% beamer folded subtitle left in \title. It renders, it is the right shape, and
+% nothing in the log says anything is wrong.
+%
+% What it costs, and what assert-after.sh measures:
+%   * /S /H1 = 0. Plain text in a frame is not tagged as anything, so the deck's
+%     title is not a heading at all. A-HEADINGS had to hand-write the H1 back for
+%     exactly this reason; the native path does not.
+%   * The long argument of \title is never rendered, so it silently duplicates
+%     the frame's text and drifts from it. Here they already disagree -- the frame
+%     says "Constraint Satisfaction", \title says something else, and the only
+%     place that shows is the PDF metadata, which nobody looks at.
+%
+% The folded subtitle is left in \title deliberately: it is what the beamer source
+% says, and it is the second thing a conversion has to fix. It does no harm HERE,
+% because without \maketitle the title element never runs -- which is precisely
+% why the defect is invisible until you move to the native title page.
+\DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
+\documentclass{ltx-talk}
+
+\hypersetup{pdfauthor={A. Lecturer}}
+
+\author[A. Lecturer]{A. Lecturer\\ \texttt{a.l@uni.ac.uk}}
+\institute[Somewhere]{University of Somewhere}
+\title[CSP]{Constraint Satisfaction and Search\\\large{Backtracking and arc consistency}}
+\date{}
+
+\begin{document}
+\begin{frame}[vertical-alignment=center]
+\begin{center}
+{\Huge\bfseries Constraint Satisfaction}\par
+\vspace{0.5em}
+{\Large Backtracking and arc consistency}\par
+\vspace{2.5em}
+{\large A. Lecturer}\par
+\vspace{0.4em}
+University of Somewhere\par
+\vspace{2.5em}
+{\small Material adapted from: Russell and Norvig (AIMA Book): Chapter 6}
+\end{center}
+\end{frame}
+\section{Assignment}
+\begin{frame}
+\frametitle{A frame}
+Body text.
+\end{frame}
+\end{document}

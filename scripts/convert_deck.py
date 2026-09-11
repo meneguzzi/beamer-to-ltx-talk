@@ -599,6 +599,88 @@ def handout_mode_findings(text: str):
     return hits
 
 
+def titlepage_findings(text: str):
+    r"""Whole-file checks around the native ltx-talk title page (C-TITLEPAGE).
+
+    The converted decks call ltx-talk's own \maketitle with the title-page elements
+    restyled in the shared preamble, rather than hand-rolling a title frame. That
+    makes \title the single source of truth for the title page, the footer and the
+    PDF metadata at once -- and that is exactly why a missing \title or \date stops
+    being a cosmetic slip and becomes a silent failure. Neither is reported by the
+    compiler:
+
+      * \maketitle with no \title -- the title page has no title, the XMP dc:title is
+        ABSENT rather than empty (measured on 0.6.2, so veraPDF ua2 clause 8.11.1
+        fails) and the footer title element is blank on every page. \coursetitlepage
+        does not have this problem: the shim sets \title from its own first argument,
+        which is the whole point of keeping it.
+      * \maketitle with no \date -- \@date defaults to \today, so the title page
+        prints the DATE OF THE BUILD, and it changes on every rebuild. Beamer does
+        the same and the beamer decks accordingly write \date{}; a conversion that
+        drops it acquires a build date nobody asked for.
+      * a folded subtitle left in \title -- the beamer idiom is
+        \title[Short]{Main\\\large{Subtitle}}, and under the shared preamble's H1
+        override that \\ makes the subtitle a SECOND H1 (measured on 0.6.2: /S /H1
+        = 2, against 1 when split). \subtitle exists in beamer too, so splitting
+        costs nothing and the deck still compiles as beamer.
+
+    NOT flagged: the attribution left as centred text after \maketitle. That is what
+    the beamer source writes, it works verbatim under ltx-talk 0.6.2, and keeping it
+    is what lets a converted deck's title block stay identical to the beamer one.
+    (A check for a deck with no \section was written and then removed: the shared
+    preamble makes the title page itself the H1, so a section-less deck still has a
+    level-one heading. See A-HEADINGS.)
+
+    Reported at the line of the construct that raises the question.
+    """
+    hits = []
+    code_lines = []
+    for lineno, raw in enumerate(text.split('\n'), 1):
+        code = '' if is_comment(raw) else re.sub(r'(?<!\\)%.*$', '', raw)
+        code_lines.append((lineno, raw, code))
+    code = '\n'.join(c for _, _, c in code_lines)
+
+    def first_line_with(pattern):
+        for lineno, raw, c in code_lines:
+            if re.search(pattern, c):
+                return lineno, raw.strip()
+        return None
+
+    maketitle = first_line_with(r'\\maketitle')
+    coursetitle = first_line_with(r'\\coursetitlepage')
+
+    if maketitle and not coursetitle:
+        lineno, src = maketitle
+        if not re.search(r'\\title\s*(\[|\{)', code):
+            hits.append((lineno, 'C-TITLEPAGE',
+                         r'\maketitle with no \title: the title page prints no title, '
+                         r'the XMP dc:title is absent entirely (veraPDF ua2 clause '
+                         r'8.11.1) and the footer title element is blank on every '
+                         r'page. Nothing warns.',
+                         src))
+        if not re.search(r'\\date\s*(\[|\{)', code):
+            hits.append((lineno, 'C-TITLEPAGE',
+                         r'\maketitle with no \date: ltx-talk defaults \@date to \today '
+                         r'(as beamer does), so the title page prints the date of the '
+                         r'BUILD and it changes on every rebuild. The beamer decks write '
+                         r'\date{} -- keep it.',
+                         src))
+
+    folded = first_line_with(r'\\title\s*(\[[^\]]*\])?\s*\{[^}]*\\\\')
+    if folded:
+        lineno, src = folded
+        hits.append((lineno, 'C-TITLEPAGE',
+                     r'\title holds a folded subtitle after a \\. Under the shared '
+                     r'preamble the title is the document H1, and the \\ makes the '
+                     r'subtitle a SECOND H1 (measured: /S /H1 = 2, against 1 when '
+                     r'split). Split it into \title{Main} and \subtitle{Subtitle} -- '
+                     r'\subtitle is a beamer command too, so the deck still compiles '
+                     r'as beamer.',
+                     src))
+
+    return hits
+
+
 def lint(text: str, path: str) -> int:
     """Report source-level failures the compiler stays silent about. Returns issue count."""
     hits = []
@@ -642,6 +724,7 @@ def lint(text: str, path: str) -> int:
             if pat.search(code):
                 hits.append((lineno, cid, msg, line.strip()))
     hits.extend(handout_mode_findings(text))
+    hits.extend(titlepage_findings(text))
     hits.sort(key=lambda h: h[0])
 
     print(f'\n=== convert_deck.py --lint: {path} ===', file=sys.stderr)
@@ -704,10 +787,8 @@ def main():
                      'algorithmicx + algpseudocode[noend], NOT algpseudocodex, or every '
                      'algorithm frame fails under tagging ("Improper \\halign inside $$\'s"). '
                      'Confirm the shared preamble (it is loaded via \\input, not this file).'))
-    if '\\maketitle' in text:
-        WARN.append(('C-TITLEPAGE', 'A \\maketitle title frame remains: replace with '
-                     '\\coursetitlepage{title}{subtitle}{attribution} by hand (stock '
-                     '\\maketitle fills the frame and any trailing text overlaps).'))
+    for _, cid, msg, _ in titlepage_findings(text):
+        WARN.append((cid, msg))
     if re.search(r'\\includegraphics(\[[^\]]*\])?\{', text):
         imgs = len(re.findall(r'\\includegraphics(?:\[[^\]]*\])?\{', text))
         alts = len(re.findall(r'\balt\s*=', text))

@@ -88,7 +88,9 @@ A fixture's `assert-<variant>.sh` runs with the cwd set to the build directory a
 and `LOG` in the environment. The library provides `must_contain` / `must_not_contain`,
 `must_share_xmin` / `must_differ_xmin` / `must_ymin_above` / `must_ymin_below` (via
 `pdftotext -bbox`), `must_have_pages`, `must_be_tagged`, `struct_count`,
-`must_have_mathml` / `must_have_no_mathml`, `log_count`, and the pixel helpers below. Each
+`must_have_mathml` / `must_have_no_mathml`, `must_have_dc_title` (the XMP document title —
+what a PDF/UA checker reads, which `pdfinfo` cannot show on a PDF 2.0 file because the Info
+dictionary is gone), `log_count`, and the pixel helpers below. Each
 failure message names the value observed, so a CI log says what was measured rather than only
 that something failed.
 
@@ -233,7 +235,7 @@ in the head comment. Measured for the current set:
 | `C-FRAME-OPT` | `[b]` frame renders centred instead of bottom-aligned | no — needs `pdftotext -bbox` (`yMin` 135.76 vs 247.96) |
 | `C-FRAMETITLE` | title renders as body text, header bar empty | **yes** — `assert-*.sh`, `yMin` 0.475 vs 0.023 of page height |
 | `C-FRAMETITLE-NESTED` | nested-brace title renders as body text, also behind an overlay spec | yes |
-| `C-TITLEPAGE` | **retired** — the overlap does not reproduce on 0.5.3 or 0.6.2, four variants measured | n/a — deliberately no `naive.tex`, see the fixture's head comment |
+| `C-TITLEPAGE` | the beamer title block survives conversion: `after.tex` differs from the beamer `before.tex` only by splitting the folded subtitle and re-tuning one `\vspace`, and carries the deck's `H1` (`/S /H1` = 1) with `dc:title` exactly the main title | `naive.tex` is the hand-rolled title frame with the fold left in: `/S /H1` = 0, and `dc:title` is `Constraint Satisfaction and SearchBacktracking and arc consistency` — drifted *and* concatenated |
 | `C-BACKGROUND` | stubbed out, the background page is 99% white under white text; unscoped, it leaks onto page 3 | **yes** — `assert-*.sh`, pixel probe, page-1 ink 1.0000 vs 0.0025; also pins `/S /Figure` = 0 |
 | `C-PDFTEX-MATH` | maths punctuation corrupt in the text layer, no MathML | **yes** — `assert-*.sh`, three engines, 4 vs 0 MathML payloads |
 | `C-GLYPH-MISSING` | the character is absent from the slide | **yes** — `assert-*.sh`, `Missing character` in the log, U+FFFD in the text layer, veraPDF `8.4.5.9-1` |

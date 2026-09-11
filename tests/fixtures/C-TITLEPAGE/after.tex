@@ -1,28 +1,64 @@
-% Converted, ltx-talk. C-TITLEPAGE workaround: do not call \maketitle at all --
-% lay the title frame out by hand so the attribution slot has somewhere to go.
-% assets/preamble-template.tex packages this as \coursetitlepage{title}{subtitle}
-% {attribution}; this fixture inlines a minimal equivalent so it stands alone.
+% Converted, ltx-talk. C-TITLEPAGE: use the class's OWN \maketitle with the five
+% titlepage-element instances restyled, and KEEP the beamer title block.
 %
-% Keep \title/\author/\institute regardless: they still feed the footer and the
-% PDF metadata even when \maketitle is never called.
+% Against before.tex the title block changes in exactly two ways, both forced:
+%
+%   1. The folded subtitle comes out of \title into \subtitle. Under the H1
+%      override below, the \\ in \title{Main\\\large{Sub}} makes the subtitle a
+%      SECOND H1 -- naive.tex measures 2 where this measures 1. \subtitle is a
+%      beamer command too, so this file still compiles as beamer.
+%   2. \vspace{-4em} is re-tuned to -1em. Beamer's value compensated for beamer's
+%      own title spacing; here it pulls the attribution up into the institute
+%      line. A number, not a construct.
+%
+% Everything else is byte-identical to the beamer source, including \author with
+% the emails and \\ inside it, \date{} empty, and the attribution as centred text
+% after \maketitle. That construct needs no workaround on 0.6.2.
+%
+% The emails inside \author DO reach XMP dc:creator; the shared preamble fixes
+% that centrally with pdfauthor= rather than by editing any deck. This fixture
+% stands alone, so it sets pdfauthor here for the same reason.
 \DocumentMetadata{lang=en, pdfversion=2.0, pdfstandard={a-4,ua-2}, tagging=on}
 \documentclass{ltx-talk}
 
-\title{Constraint Satisfaction}
-\author{A. Lecturer}
-\institute{University of Somewhere}
+% A-HEADINGS on the title page: the stock `title' instance opens a MANUAL
+% \tag_struct_begin:n{tag=Title} around a paragraph the kernel's automatic tagger
+% also tags, so remapping Title -> H1 would nest P inside Hn and veraPDF rejects
+% it. Replace the wrapper instead and let the automatic tagger emit the H1.
+% tag-end is empty on purpose -- the element's own \group_begin:/\group_end:
+% scopes the keys, and a default \tag_struct_end: would fire unmatched.
+\EditInstance{titlepage-element}{title}
+  { font = \Huge\bfseries , before-skip = 0pt , after-skip = 0.5em ,
+    tag-begin = {\tagpdfsetup{para/tag=H1,para/flattened}} , tag-end = {} }
+\EditInstance{titlepage-element}{subtitle}
+  { color = black , font = \Large , before-skip = 0pt , after-skip = 2.5em }
+\EditInstance{titlepage-element}{author}
+  { font = \large , before-skip = 0pt , after-skip = 0.4em }
+\EditInstance{titlepage-element}{institute}
+  { font = \normalsize , before-skip = 0pt , after-skip = 2.5em }
+\EditInstance{titlepage-element}{date}
+  { font = \small , before-skip = 0pt , after-skip = 0pt }
+
+\hypersetup{pdfauthor={A. Lecturer}}
+
+\author[A. Lecturer]{A. Lecturer\\ \texttt{a.l@uni.ac.uk}}
+\institute[Somewhere]{University of Somewhere}
+\title[CSP]{Constraint Satisfaction}
+\subtitle{Backtracking and arc consistency}
+\date{}
 
 \begin{document}
-\begin{frame}[vertical-alignment=center]
-\begin{center}
-{\Large Constraint Satisfaction}
-
-\medskip
-A. Lecturer
-
-{\footnotesize University of Somewhere}
-\end{center}
-\vfill
-{\footnotesize Material adapted from Russell \& Norvig.}
+\begin{frame}
+	\maketitle
+	\vspace{-1em}
+	\begin{center}
+		Material adapted from: \\
+		Russell and Norvig (AIMA Book): Chapter 6
+	\end{center}
+\end{frame}
+\section{Assignment}
+\begin{frame}
+\frametitle{A frame}
+Body text.
 \end{frame}
 \end{document}
